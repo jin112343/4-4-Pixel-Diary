@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../../../../core/constants/color_constants.dart';
-import 'pixel_canvas.dart';
+import '../home_view_model.dart';
 
 /// カラーパレット
 class ColorPalette extends ConsumerWidget {
@@ -11,7 +11,9 @@ class ColorPalette extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedColor = ref.watch(selectedColorProvider);
+    final selectedColor = ref.watch(
+      homeViewModelProvider.select((state) => state.selectedColor),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,7 +59,7 @@ class ColorPalette extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
                   onTap: () {
-                    ref.read(selectedColorProvider.notifier).state = color;
+                    ref.read(homeViewModelProvider.notifier).selectColor(color);
                   },
                   child: Container(
                     width: 40,
@@ -81,7 +83,11 @@ class ColorPalette extends ConsumerWidget {
   }
 
   /// カラーピッカーダイアログを表示
-  void _showColorPicker(BuildContext context, WidgetRef ref, Color currentColor) {
+  void _showColorPicker(
+    BuildContext context,
+    WidgetRef ref,
+    Color currentColor,
+  ) {
     var pickedColor = currentColor;
 
     showDialog<void>(
@@ -107,7 +113,7 @@ class ColorPalette extends ConsumerWidget {
             ),
             ElevatedButton(
               onPressed: () {
-                ref.read(selectedColorProvider.notifier).state = pickedColor;
+                ref.read(homeViewModelProvider.notifier).selectColor(pickedColor);
                 Navigator.of(context).pop();
               },
               child: const Text('えらぶ'),

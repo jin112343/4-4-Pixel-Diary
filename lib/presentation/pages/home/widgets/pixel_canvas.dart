@@ -1,19 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/constants/color_constants.dart';
-
-/// 現在選択中の色
-final selectedColorProvider = StateProvider<Color>((ref) => Colors.black);
-
-/// キャンバスのピクセルデータ
-final pixelsProvider = StateProvider<List<Color>>((ref) {
-  return List.filled(
-    AppConstants.defaultPixelCount,
-    ColorConstants.defaultCanvasColor,
-  );
-});
+import '../home_view_model.dart';
 
 /// ドット絵キャンバス
 class PixelCanvas extends ConsumerWidget {
@@ -21,9 +10,13 @@ class PixelCanvas extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pixels = ref.watch(pixelsProvider);
-    final selectedColor = ref.watch(selectedColorProvider);
-    const gridSize = AppConstants.defaultGridSize;
+    final homeState = ref.watch(homeViewModelProvider);
+    final pixels = homeState.pixels;
+    final gridSize = homeState.gridSize;
+
+    if (pixels.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return AspectRatio(
       aspectRatio: 1,
@@ -45,7 +38,7 @@ class PixelCanvas extends ConsumerWidget {
             return _PixelCell(
               index: index,
               color: pixels[index],
-              selectedColor: selectedColor,
+              selectedColor: homeState.selectedColor,
             );
           },
         ),
@@ -70,18 +63,17 @@ class _PixelCell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: () {
-        // 選択中の色で塗る
-        final pixels = ref.read(pixelsProvider.notifier);
-        final currentPixels = List<Color>.from(ref.read(pixelsProvider));
-        currentPixels[index] = selectedColor;
-        pixels.state = currentPixels;
+        ref.read(homeViewModelProvider.notifier).setPixelColor(
+              index,
+              selectedColor,
+            );
       },
       onLongPress: () {
         // 長押しで消す（白に戻す）
-        final pixels = ref.read(pixelsProvider.notifier);
-        final currentPixels = List<Color>.from(ref.read(pixelsProvider));
-        currentPixels[index] = ColorConstants.defaultCanvasColor;
-        pixels.state = currentPixels;
+        ref.read(homeViewModelProvider.notifier).setPixelColor(
+              index,
+              ColorConstants.defaultCanvasColor,
+            );
       },
       child: Container(
         decoration: BoxDecoration(

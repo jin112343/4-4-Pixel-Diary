@@ -126,7 +126,7 @@ class RetryInterceptor extends Interceptor {
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     final options = err.requestOptions;
-    final retryCount = options.extra['retryCount'] ?? 0;
+    final retryCount = (options.extra['retryCount'] as int?) ?? 0;
 
     // リトライ可能なエラーかチェック
     if (_shouldRetry(err) && retryCount < maxRetries) {

@@ -43,6 +43,9 @@ class PixelArt with _$PixelArt {
 
     /// 作成者ID（匿名UUID）
     String? ownerId,
+
+    /// 作成者のニックネーム
+    String? authorNickname,
   }) = _PixelArt;
 
   factory PixelArt.fromJson(Map<String, dynamic> json) =>
