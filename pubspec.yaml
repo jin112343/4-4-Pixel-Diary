@@ -1,0 +1,70 @@
+name: pixeldiary
+description: "4×4 Pixel Diary - ドット絵交換日記アプリ"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # 状態管理
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # モデル生成
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # 関数型プログラミング
+  fpdart: ^1.1.0
+
+  # ネットワーク
+  dio: ^5.7.0
+
+  # ローカルストレージ
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.2.2
+
+  # ルーティング
+  go_router: ^14.6.2
+
+  # Bluetooth
+  flutter_blue_plus: ^1.35.2
+
+  # 課金
+  in_app_purchase: ^3.2.0
+
+  # ユーティリティ
+  logger: ^2.5.0
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+  # UI
+  flutter_colorpicker: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # コード生成
+  build_runner: ^2.4.13
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.6.2
+
+  # テスト
+  mocktail: ^1.0.4
+
+  # 静的解析
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
