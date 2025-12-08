@@ -44,8 +44,27 @@ dependencies:
   uuid: ^4.5.1
   intl: ^0.19.0
 
+  # ネットワーク監視
+  connectivity_plus: ^6.1.1
+
+  # プッシュ通知
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.6
+
+  # ルート/JB検知
+  safe_device: ^1.1.7
+
   # UI
   flutter_colorpicker: ^1.1.0
+
+  # セキュリティ
+  crypto: ^3.0.5
+
+  # 設定保存
+  shared_preferences: ^2.3.3
+
+  # URL起動
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
