@@ -10,8 +10,11 @@ import '../../core/utils/logger.dart';
 /// AES-256-GCMを使用してデータを暗号化・復号化
 class BleCrypto {
   // 共有シークレット（アプリ固有）
-  // 実運用時はより安全な鍵交換を実装すること
-  static const String _appSecret = 'pixeldiary_ble_exchange_2024';
+  // 環境変数から読み込み: --dart-define=BLE_CRYPTO_SECRET=your_secret
+  static const String _appSecret = String.fromEnvironment(
+    'BLE_CRYPTO_SECRET',
+    defaultValue: '',
+  );
 
   final Random _random = Random.secure();
 
@@ -19,6 +22,9 @@ class BleCrypto {
   /// XOR暗号化 + Base64エンコード（軽量実装）
   /// 注意: 本番環境ではAES-GCMなど強力な暗号化を使用すること
   String encrypt(String plainText) {
+    if (_appSecret.isEmpty) {
+      logger.w('BLE_CRYPTO_SECRET is not set. Using fallback encryption.');
+    }
     try {
       // ランダムな16バイトのIVを生成
       final iv = _generateIv();

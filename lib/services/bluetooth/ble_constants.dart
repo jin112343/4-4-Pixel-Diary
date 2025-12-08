@@ -53,8 +53,11 @@ class BleConstants {
   static const int pairingConfirmTimeout = 30;
 
   /// ペアリング認証用シークレット（アプリ固有）
-  /// 注意: 本番環境ではより安全な方法で管理すること
-  static const String pairingSecret = 'pixeldiary_pairing_2024_secure';
+  /// 環境変数から読み込み: --dart-define=BLE_PAIRING_SECRET=your_secret
+  static const String pairingSecret = String.fromEnvironment(
+    'BLE_PAIRING_SECRET',
+    defaultValue: '',
+  );
 
   /// ペアリング必須かどうか
   static const bool requirePairing = true;
