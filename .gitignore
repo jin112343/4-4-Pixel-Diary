@@ -62,3 +62,10 @@ secrets.dart
 **/ios/.symlinks/
 **/macos/Pods/
 **/macos/.symlinks/
+
+# Project documentation (personal)
+/README.md
+/TODO.md
+/CLAUDE.md
+*.md
+!ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
