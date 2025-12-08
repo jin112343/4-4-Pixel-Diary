@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../../../../core/constants/color_constants.dart';
 import '../home_view_model.dart';
@@ -99,7 +100,7 @@ class ColorPalette extends ConsumerWidget {
   }
 }
 
-/// カラーピッカーダイアログ（タブ式）
+/// カラーピッカーダイアログ（タブ式・flutter_colorpicker活用）
 class _ColorPickerDialog extends StatefulWidget {
   const _ColorPickerDialog({
     required this.initialColor,
@@ -118,19 +119,11 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
   late TabController _tabController;
   late Color _selectedColor;
 
-  // RGB値
-  late int _red;
-  late int _green;
-  late int _blue;
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _selectedColor = widget.initialColor;
-    _red = _selectedColor.red;
-    _green = _selectedColor.green;
-    _blue = _selectedColor.blue;
   }
 
   @override
@@ -139,35 +132,34 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
     super.dispose();
   }
 
-  void _updateColorFromRGB() {
+  void _onColorChanged(Color color) {
     setState(() {
-      _selectedColor = Color.fromARGB(255, _red, _green, _blue);
+      _selectedColor = color;
     });
   }
 
-  void _selectColor(Color color) {
-    setState(() {
-      _selectedColor = color;
-      _red = color.red;
-      _green = color.green;
-      _blue = color.blue;
-    });
+  String _colorToHex(Color color) {
+    final r = ((color.r * 255.0).round() & 0xff).toRadixString(16).padLeft(2, '0');
+    final g = ((color.g * 255.0).round() & 0xff).toRadixString(16).padLeft(2, '0');
+    final b = ((color.b * 255.0).round() & 0xff).toRadixString(16).padLeft(2, '0');
+    return '#${r.toUpperCase()}${g.toUpperCase()}${b.toUpperCase()}';
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('いろをえらぶ'),
-      contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
       content: SizedBox(
         width: double.maxFinite,
-        height: 400,
+        height: 450,
         child: Column(
           children: [
             // 選択中の色プレビュー
             Container(
-              height: 50,
+              height: 40,
               width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: _selectedColor,
                 borderRadius: BorderRadius.circular(8),
@@ -175,24 +167,29 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
               ),
               child: Center(
                 child: Text(
-                  '#${_selectedColor.value.toRadixString(16).substring(2).toUpperCase()}',
+                  _colorToHex(_selectedColor),
                   style: TextStyle(
                     color: _selectedColor.computeLuminance() > 0.5
                         ? Colors.black
                         : Colors.white,
                     fontWeight: FontWeight.bold,
+                    fontSize: 12,
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // タブバー
             TabBar(
               controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: const [
-                Tab(text: 'RGB'),
-                Tab(text: 'パレット'),
+                Tab(icon: Icon(Icons.circle_outlined, size: 18), text: 'ホイール'),
+                Tab(icon: Icon(Icons.tune, size: 18), text: 'RGB'),
+                Tab(icon: Icon(Icons.grid_view, size: 18), text: 'パレット'),
+                Tab(icon: Icon(Icons.color_lens, size: 18), text: 'マテリアル'),
               ],
             ),
 
@@ -201,29 +198,28 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
               child: TabBarView(
                 controller: _tabController,
                 children: [
+                  // カラーホイール（HUEリングピッカー）
+                  _ColorWheelTab(
+                    color: _selectedColor,
+                    onColorChanged: _onColorChanged,
+                  ),
+
                   // RGBスライダー
                   _RGBSliderTab(
-                    red: _red,
-                    green: _green,
-                    blue: _blue,
-                    onRedChanged: (value) {
-                      _red = value;
-                      _updateColorFromRGB();
-                    },
-                    onGreenChanged: (value) {
-                      _green = value;
-                      _updateColorFromRGB();
-                    },
-                    onBlueChanged: (value) {
-                      _blue = value;
-                      _updateColorFromRGB();
-                    },
+                    color: _selectedColor,
+                    onColorChanged: _onColorChanged,
                   ),
 
                   // パレットグリッド
                   _PaletteGridTab(
                     selectedColor: _selectedColor,
-                    onColorSelected: _selectColor,
+                    onColorSelected: _onColorChanged,
+                  ),
+
+                  // マテリアルカラー
+                  _MaterialColorTab(
+                    selectedColor: _selectedColor,
+                    onColorSelected: _onColorChanged,
                   ),
                 ],
               ),
@@ -248,118 +244,57 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
   }
 }
 
-/// RGBスライダータブ
-class _RGBSliderTab extends StatelessWidget {
-  const _RGBSliderTab({
-    required this.red,
-    required this.green,
-    required this.blue,
-    required this.onRedChanged,
-    required this.onGreenChanged,
-    required this.onBlueChanged,
+/// カラーホイールタブ（HUEリングピッカー）
+class _ColorWheelTab extends StatelessWidget {
+  const _ColorWheelTab({
+    required this.color,
+    required this.onColorChanged,
   });
 
-  final int red;
-  final int green;
-  final int blue;
-  final void Function(int) onRedChanged;
-  final void Function(int) onGreenChanged;
-  final void Function(int) onBlueChanged;
+  final Color color;
+  final void Function(Color) onColorChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Column(
-        children: [
-          // Rスライダー
-          _ColorSlider(
-            label: 'R',
-            value: red,
-            color: Colors.red,
-            onChanged: onRedChanged,
-          ),
-          const SizedBox(height: 16),
-
-          // Gスライダー
-          _ColorSlider(
-            label: 'G',
-            value: green,
-            color: Colors.green,
-            onChanged: onGreenChanged,
-          ),
-          const SizedBox(height: 16),
-
-          // Bスライダー
-          _ColorSlider(
-            label: 'B',
-            value: blue,
-            color: Colors.blue,
-            onChanged: onBlueChanged,
-          ),
-        ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(8),
+      child: HueRingPicker(
+        pickerColor: color,
+        onColorChanged: onColorChanged,
+        enableAlpha: false,
+        displayThumbColor: true,
       ),
     );
   }
 }
 
-/// カラースライダー
-class _ColorSlider extends StatelessWidget {
-  const _ColorSlider({
-    required this.label,
-    required this.value,
+/// RGBスライダータブ（flutter_colorpicker の SlidePicker）
+class _RGBSliderTab extends StatelessWidget {
+  const _RGBSliderTab({
     required this.color,
-    required this.onChanged,
+    required this.onColorChanged,
   });
 
-  final String label;
-  final int value;
   final Color color;
-  final void Function(int) onChanged;
+  final void Function(Color) onColorChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 24,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: color,
-              thumbColor: color,
-              inactiveTrackColor: color.withValues(alpha: 0.3),
-            ),
-            child: Slider(
-              value: value.toDouble(),
-              min: 0,
-              max: 255,
-              divisions: 255,
-              onChanged: (v) => onChanged(v.toInt()),
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 40,
-          child: Text(
-            value.toString().padLeft(3, '0'),
-            style: const TextStyle(fontFamily: 'monospace'),
-          ),
-        ),
-      ],
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(8),
+      child: SlidePicker(
+        pickerColor: color,
+        onColorChanged: onColorChanged,
+        enableAlpha: false,
+        showParams: true,
+        showIndicator: true,
+        indicatorBorderRadius: BorderRadius.circular(8),
+      ),
     );
   }
 }
 
-/// パレットグリッドタブ
+/// パレットグリッドタブ（BlockPicker）
 class _PaletteGridTab extends StatelessWidget {
   const _PaletteGridTab({
     required this.selectedColor,
@@ -371,33 +306,60 @@ class _PaletteGridTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 6,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-        ),
-        itemCount: ColorConstants.paletteGridColors.length,
-        itemBuilder: (context, index) {
-          final color = ColorConstants.paletteGridColors[index];
-          final isSelected = color == selectedColor;
-
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(8),
+      child: BlockPicker(
+        pickerColor: selectedColor,
+        onColorChanged: onColorSelected,
+        availableColors: ColorConstants.paletteGridColors,
+        layoutBuilder: (context, colors, child) {
+          return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 6,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+            children: colors.map((color) => child(color)).toList(),
+          );
+        },
+        itemBuilder: (color, isCurrentColor, changeColor) {
           return GestureDetector(
-            onTap: () => onColorSelected(color),
+            onTap: changeColor,
             child: Container(
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(4),
                 border: Border.all(
-                  color: isSelected ? Colors.blue : Colors.grey.shade400,
-                  width: isSelected ? 3 : 1,
+                  color: isCurrentColor ? Colors.blue : Colors.grey.shade400,
+                  width: isCurrentColor ? 3 : 1,
                 ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// マテリアルカラータブ
+class _MaterialColorTab extends StatelessWidget {
+  const _MaterialColorTab({
+    required this.selectedColor,
+    required this.onColorSelected,
+  });
+
+  final Color selectedColor;
+  final void Function(Color) onColorSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(8),
+      child: MaterialPicker(
+        pickerColor: selectedColor,
+        onColorChanged: onColorSelected,
+        enableLabel: true,
       ),
     );
   }
