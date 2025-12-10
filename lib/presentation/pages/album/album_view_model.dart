@@ -42,6 +42,12 @@ class AlbumState with _$AlbumState {
 
     /// 選択中のドット絵ID（削除用）
     String? selectedPixelArtId,
+
+    /// 選択モードかどうか
+    @Default(false) bool isSelectionMode,
+
+    /// 複数選択中のドット絵IDセット
+    @Default({}) Set<String> selectedIds,
   }) = _AlbumState;
 }
 
@@ -82,13 +88,24 @@ class AlbumViewModel extends StateNotifier<AlbumState> {
           logger.e('Failed to load album: ${failure.message}');
         },
         (album) {
-          final sortedArts = _sortPixelArts(album.pixelArts);
+          // 届いたもの（server, bluetooth）のみをフィルタリング
+          final receivedArts = album.pixelArts
+              .where((art) => art.source != PixelArtSource.local)
+              .toList();
+          final sortedArts = _sortPixelArts(receivedArts);
+          final hasMoreData = album.pixelArts.length >= 20;
           state = state.copyWith(
             isLoading: false,
             pixelArts: refresh ? sortedArts : [...state.pixelArts, ...sortedArts],
-            hasMore: album.pixelArts.length >= 20,
+            hasMore: hasMoreData,
           );
-          logger.i('Album loaded: ${album.pixelArts.length} items');
+          logger.i('Album loaded: ${receivedArts.length} received items');
+
+          // フィルタリング後のアイテムが0件で、まだデータがある場合は
+          // 自動で次のページをロード
+          if (receivedArts.isEmpty && hasMoreData) {
+            loadMore();
+          }
         },
       );
     } catch (e, stackTrace) {
@@ -173,6 +190,88 @@ class AlbumViewModel extends StateNotifier<AlbumState> {
     state = state.copyWith(errorMessage: null);
   }
 
+  // ========== 複数選択機能 ==========
+
+  /// 選択モードを開始
+  void startSelectionMode() {
+    state = state.copyWith(
+      isSelectionMode: true,
+      selectedIds: {},
+    );
+  }
+
+  /// 選択モードを終了
+  void endSelectionMode() {
+    state = state.copyWith(
+      isSelectionMode: false,
+      selectedIds: {},
+    );
+  }
+
+  /// ドット絵の選択をトグル
+  void toggleSelection(String id) {
+    final selectedIds = Set<String>.from(state.selectedIds);
+    if (selectedIds.contains(id)) {
+      selectedIds.remove(id);
+    } else {
+      selectedIds.add(id);
+    }
+    state = state.copyWith(selectedIds: selectedIds);
+  }
+
+  /// 全て選択
+  void selectAll() {
+    final allIds = state.pixelArts.map((art) => art.id).toSet();
+    state = state.copyWith(selectedIds: allIds);
+  }
+
+  /// 全て選択解除
+  void deselectAll() {
+    state = state.copyWith(selectedIds: {});
+  }
+
+  /// 選択したドット絵を一括削除
+  Future<void> deleteSelectedPixelArts() async {
+    if (state.selectedIds.isEmpty) return;
+
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      final idsToDelete = List<String>.from(state.selectedIds);
+      var successCount = 0;
+
+      for (final id in idsToDelete) {
+        final result = await _albumRepository.removeFromAlbum(id);
+        result.fold(
+          (failure) {
+            logger.e('Failed to delete pixel art: $id - ${failure.message}');
+          },
+          (_) {
+            successCount++;
+          },
+        );
+      }
+
+      // 削除成功したものをリストから除去
+      state = state.copyWith(
+        isLoading: false,
+        pixelArts: state.pixelArts
+            .where((art) => !idsToDelete.contains(art.id))
+            .toList(),
+        selectedIds: {},
+        isSelectionMode: false,
+      );
+
+      logger.i('Deleted $successCount/${idsToDelete.length} pixel arts');
+    } catch (e, stackTrace) {
+      logger.e('Delete selected error', error: e, stackTrace: stackTrace);
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: '削除に失敗しました',
+      );
+    }
+  }
+
   /// 日付でフィルタリング
   Future<void> filterByDate(DateTime date) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
@@ -188,9 +287,13 @@ class AlbumViewModel extends StateNotifier<AlbumState> {
           );
         },
         (arts) {
+          // 届いたもの（server, bluetooth）のみをフィルタリング
+          final receivedArts = arts
+              .where((art) => art.source != PixelArtSource.local)
+              .toList();
           state = state.copyWith(
             isLoading: false,
-            pixelArts: _sortPixelArts(arts),
+            pixelArts: _sortPixelArts(receivedArts),
             hasMore: false,
           );
         },

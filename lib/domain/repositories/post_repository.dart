@@ -2,7 +2,6 @@ import 'package:fpdart/fpdart.dart';
 
 import '../../core/errors/failures.dart';
 import '../entities/post.dart';
-import '../entities/comment.dart';
 
 /// 投稿の並び順
 enum PostSortOrder {
@@ -31,6 +30,10 @@ abstract class PostRepository {
   /// 投稿を作成
   Future<Either<Failure, Post>> createPost({
     required String pixelArtId,
+    required List<int> pixels,
+    required String title,
+    required int gridSize,
+    String? nickname,
     required PostVisibility visibility,
   });
 
@@ -42,22 +45,6 @@ abstract class PostRepository {
 
   /// いいねを取り消す
   Future<Either<Failure, void>> unlike(String postId);
-
-  /// コメントを取得
-  Future<Either<Failure, List<Comment>>> getComments({
-    required String postId,
-    int page = 1,
-    int limit = 20,
-  });
-
-  /// コメントを追加
-  Future<Either<Failure, Comment>> addComment({
-    required String postId,
-    required String content,
-  });
-
-  /// コメントを削除
-  Future<Either<Failure, void>> deleteComment(String commentId);
 
   /// 投稿を通報
   Future<Either<Failure, void>> reportPost({

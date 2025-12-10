@@ -1,0 +1,36 @@
+{
+  "name": "pixeldiary-infrastructure",
+  "version": "1.0.0",
+  "description": "AWS CDK Infrastructure for 4x4 Pixel Diary",
+  "main": "dist/bin/infrastructure.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all",
+    "deploy:dev": "cdk deploy --all -c environment=dev",
+    "deploy:prod": "cdk deploy --all -c environment=prod",
+    "destroy": "cdk destroy --all",
+    "diff": "cdk diff",
+    "bootstrap": "cdk bootstrap",
+    "lint": "eslint . --ext .ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.24.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@aws-sdk/client-comprehend": "^3.700.0",
+    "@aws-sdk/client-rekognition": "^3.700.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^22.10.1",
+    "aws-cdk": "^2.170.0",
+    "typescript": "^5.7.2"
+  }
+}

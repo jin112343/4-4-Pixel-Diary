@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:encrypt/encrypt.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 
 import '../../core/utils/logger.dart';
 
@@ -16,32 +17,47 @@ class BleCrypto {
     defaultValue: '',
   );
 
-  final Random _random = Random.secure();
+  late final Encrypter _encrypter;
+  late final Key _key;
+
+  BleCrypto() {
+    // 本番環境では暗号化キーが必須
+    if (_appSecret.isEmpty) {
+      if (kReleaseMode) {
+        throw StateError(
+          'BLE_CRYPTO_SECRET must be set in production build.\n'
+          'Build with: flutter build --dart-define=BLE_CRYPTO_SECRET=your_secret_key',
+        );
+      }
+      logger.w(
+        'BLE_CRYPTO_SECRET is not set. Using development fallback key.\n'
+        'This is only allowed in debug mode.',
+      );
+    }
+
+    // シークレットから256ビット(32バイト)の鍵を導出
+    _key = _deriveKey256(
+      _appSecret.isNotEmpty ? _appSecret : 'dev_fallback_only_insecure',
+    );
+    _encrypter = Encrypter(AES(_key, mode: AESMode.gcm));
+  }
 
   /// データを暗号化
-  /// XOR暗号化 + Base64エンコード（軽量実装）
-  /// 注意: 本番環境ではAES-GCMなど強力な暗号化を使用すること
+  /// AES-256-GCM暗号化 + Base64エンコード
   String encrypt(String plainText) {
-    if (_appSecret.isEmpty) {
-      logger.w('BLE_CRYPTO_SECRET is not set. Using fallback encryption.');
-    }
     try {
-      // ランダムな16バイトのIVを生成
-      final iv = _generateIv();
+      // ランダムなIVを生成（GCMには12バイト推奨）
+      final iv = IV.fromSecureRandom(12);
 
-      // 鍵を生成（IV + シークレットのハッシュ）
-      final key = _deriveKey(iv);
+      // AES-GCM暗号化
+      final encrypted = _encrypter.encrypt(plainText, iv: iv);
 
-      // XOR暗号化
-      final plainBytes = utf8.encode(plainText);
-      final encryptedBytes = _xorEncrypt(plainBytes, key);
+      // IV + 暗号文 + 認証タグを結合してBase64エンコード
+      final combined = Uint8List.fromList([
+        ...iv.bytes,
+        ...encrypted.bytes,
+      ]);
 
-      // IV + 暗号文を結合
-      final combined = Uint8List(iv.length + encryptedBytes.length);
-      combined.setRange(0, iv.length, iv);
-      combined.setRange(iv.length, combined.length, encryptedBytes);
-
-      // Base64エンコード
       return base64Encode(combined);
     } catch (e, stackTrace) {
       logger.e('encrypt failed', error: e, stackTrace: stackTrace);
@@ -55,50 +71,30 @@ class BleCrypto {
       // Base64デコード
       final combined = base64Decode(encryptedText);
 
-      if (combined.length < 16) {
+      if (combined.length < 12) {
         throw const FormatException('Invalid encrypted data');
       }
 
-      // IVと暗号文を分離
-      final iv = Uint8List.sublistView(combined, 0, 16);
-      final encryptedBytes = Uint8List.sublistView(combined, 16);
+      // IVと暗号文を分離（GCMのIVは12バイト）
+      final iv = IV(Uint8List.fromList(combined.sublist(0, 12)));
+      final encryptedBytes = Uint8List.fromList(combined.sublist(12));
 
-      // 鍵を生成
-      final key = _deriveKey(iv);
+      // AES-GCM復号化
+      final encrypted = Encrypted(encryptedBytes);
+      final decrypted = _encrypter.decrypt(encrypted, iv: iv);
 
-      // XOR復号化
-      final decryptedBytes = _xorEncrypt(encryptedBytes, key);
-
-      return utf8.decode(decryptedBytes);
+      return decrypted;
     } catch (e, stackTrace) {
       logger.e('decrypt failed', error: e, stackTrace: stackTrace);
       return null;
     }
   }
 
-  /// ランダムなIVを生成
-  Uint8List _generateIv() {
-    final iv = Uint8List(16);
-    for (var i = 0; i < 16; i++) {
-      iv[i] = _random.nextInt(256);
-    }
-    return iv;
-  }
-
-  /// IVとシークレットから鍵を導出
-  Uint8List _deriveKey(Uint8List iv) {
-    final combined = utf8.encode(_appSecret) + iv;
-    final hash = sha256.convert(combined);
-    return Uint8List.fromList(hash.bytes);
-  }
-
-  /// XOR暗号化/復号化（対称）
-  Uint8List _xorEncrypt(Uint8List data, Uint8List key) {
-    final result = Uint8List(data.length);
-    for (var i = 0; i < data.length; i++) {
-      result[i] = data[i] ^ key[i % key.length];
-    }
-    return result;
+  /// シークレットから256ビット(32バイト)の鍵を導出
+  Key _deriveKey256(String secret) {
+    // SHA-256でハッシュ化して32バイトの鍵を生成
+    final hash = sha256.convert(utf8.encode(secret));
+    return Key(Uint8List.fromList(hash.bytes));
   }
 
   /// チェックサムを計算

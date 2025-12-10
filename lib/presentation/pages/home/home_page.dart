@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/routes/app_router.dart';
+import '../album/album_view_model.dart';
 import 'home_view_model.dart';
 import 'widgets/pixel_canvas.dart';
 import 'widgets/color_palette.dart';
@@ -44,12 +45,7 @@ class HomePage extends ConsumerWidget {
           child: Column(
             children: [
               // キャンバス
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: PixelCanvas(),
-                ),
-              ),
+              Expanded(flex: 3, child: Center(child: PixelCanvas())),
 
               SizedBox(height: 16),
 
@@ -75,27 +71,53 @@ class HomePage extends ConsumerWidget {
   /// 状態変化を監視
   void _listenToState(BuildContext context, WidgetRef ref) {
     ref.listen<HomeState>(homeViewModelProvider, (previous, next) {
-      // エラーメッセージ表示
-      if (next.errorMessage != null && previous?.errorMessage != next.errorMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Colors.red,
+      // NGワードエラー時にダイアログ表示
+      if (next.titleError != null &&
+          previous?.titleError != next.titleError) {
+        showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error, color: Colors.red),
+                SizedBox(width: 8),
+                Text('エラー'),
+              ],
+            ),
+            content: Text(next.titleError!),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  // タイトルをクリアしてダイアログを閉じる
+                  ref.read(homeViewModelProvider.notifier).setTitle('');
+                  Navigator.of(context).pop();
+                },
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
-        ref.read(homeViewModelProvider.notifier).clearError();
       }
 
       // 受信アート表示
-      if (next.receivedArt != null && previous?.receivedArt != next.receivedArt) {
+      if (next.receivedArt != null &&
+          previous?.receivedArt != next.receivedArt) {
         showDialog<void>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => ReceivedArtDialog(
+          builder: (dialogContext) => ReceivedArtDialog(
             pixelArt: next.receivedArt!,
-            onDismiss: () {
+            onDismiss: () async {
               ref.read(homeViewModelProvider.notifier).clearReceivedArt();
-              Navigator.of(context).pop();
+              Navigator.of(dialogContext).pop();
+
+              // アルバムを更新
+              final userIdAsync = ref.read(currentUserIdProvider);
+              userIdAsync.whenData((userId) {
+                ref
+                    .read(albumViewModelProvider(userId).notifier)
+                    .loadAlbum(refresh: true);
+              });
             },
           ),
         );
@@ -165,27 +187,62 @@ class _RedoButton extends ConsumerWidget {
 }
 
 /// タイトル入力
-class _TitleInput extends ConsumerWidget {
+class _TitleInput extends ConsumerStatefulWidget {
   const _TitleInput();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final title = ref.watch(
-      homeViewModelProvider.select((state) => state.title),
+  ConsumerState<_TitleInput> createState() => _TitleInputState();
+}
+
+class _TitleInputState extends ConsumerState<_TitleInput> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final title = ref.read(homeViewModelProvider).title;
+    _controller = TextEditingController(text: title);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // タイトル変更を監視してコントローラーを更新
+    ref.listen<String>(homeViewModelProvider.select((state) => state.title), (
+      previous,
+      next,
+    ) {
+      if (_controller.text != next) {
+        _controller.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: next.length),
+        );
+      }
+    });
+
+    // タイトルエラーを監視
+    final titleError = ref.watch(
+      homeViewModelProvider.select((state) => state.titleError),
     );
 
     return TextField(
       maxLength: AppConstants.maxTitleLength,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'タイトル（5文字まで）',
         hintText: 'なにをかいた？',
         counterText: '',
+        errorText: titleError,
+        errorStyle: const TextStyle(fontSize: 12),
       ),
       onChanged: (value) {
         ref.read(homeViewModelProvider.notifier).setTitle(value);
       },
-      controller: TextEditingController(text: title)
-        ..selection = TextSelection.collapsed(offset: title.length),
+      controller: _controller,
     );
   }
 }
@@ -199,12 +256,18 @@ class _ExchangeButton extends ConsumerWidget {
     final isExchanging = ref.watch(
       homeViewModelProvider.select((state) => state.isExchanging),
     );
+    final titleError = ref.watch(
+      homeViewModelProvider.select((state) => state.titleError),
+    );
+
+    // NGワードエラーがある場合はボタンを無効化
+    final isDisabled = isExchanging || titleError != null;
 
     return SizedBox(
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: isExchanging
+        onPressed: isDisabled
             ? null
             : () => ref.read(homeViewModelProvider.notifier).exchange(),
         style: ElevatedButton.styleFrom(
@@ -220,12 +283,9 @@ class _ExchangeButton extends ConsumerWidget {
                   color: Colors.white,
                 ),
               )
-            : const Text(
-                'こうかんする',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+            : Text(
+                titleError != null ? '使用できない表現があります' : 'こうかんする',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
       ),
     );

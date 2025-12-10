@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:uuid/uuid.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/color_constants.dart';
+import '../../../core/utils/content_filter.dart';
 import '../../../core/utils/logger.dart';
+import '../../../data/datasources/local/local_storage.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../domain/repositories/pixel_art_repository.dart';
 import '../../../providers/app_providers.dart';
+import '../../../providers/moderation_provider.dart';
+import '../../../services/moderation/moderation_service.dart';
 
 part 'home_view_model.freezed.dart';
 
@@ -23,6 +29,9 @@ class HomeState with _$HomeState {
 
     /// タイトル
     @Default('') String title,
+
+    /// タイトルのNGワードエラー
+    String? titleError,
 
     /// グリッドサイズ
     @Default(4) int gridSize,
@@ -47,8 +56,14 @@ class HomeState with _$HomeState {
 /// ホーム画面のViewModel
 class HomeViewModel extends StateNotifier<HomeState> {
   final PixelArtRepository _pixelArtRepository;
+  final LocalStorage _localStorage;
+  final ModerationService _moderationService;
 
-  HomeViewModel(this._pixelArtRepository) : super(const HomeState()) {
+  HomeViewModel(
+    this._pixelArtRepository,
+    this._localStorage,
+    this._moderationService,
+  ) : super(const HomeState()) {
     _initializePixels();
   }
 
@@ -84,10 +99,22 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
   /// タイトルを設定
   void setTitle(String title) {
+    // 文字数制限のみチェック（NGワードはexchange時にチェック）
     if (title.length <= AppConstants.maxTitleLength) {
-      state = state.copyWith(title: title);
+      state = state.copyWith(
+        title: title,
+        titleError: null, // 入力時はエラーをクリア
+      );
     }
   }
+
+  /// タイトルエラーをクリア
+  void clearTitleError() {
+    state = state.copyWith(titleError: null);
+  }
+
+  /// タイトルが有効かどうか
+  bool get isTitleValid => state.titleError == null;
 
   /// キャンバスをクリア
   void clearCanvas() {
@@ -138,6 +165,41 @@ class HomeViewModel extends StateNotifier<HomeState> {
   Future<void> exchange() async {
     if (state.isExchanging) return;
 
+    // タイトル未入力チェック
+    if (state.title.trim().isEmpty) {
+      state = state.copyWith(
+        titleError: 'タイトルを入力してください',
+      );
+      return;
+    }
+
+    // ステップ1: ローカルフィルタ（超厳格チェック）
+    final filterResult = TitleFilter.filter(state.title);
+    if (!filterResult.isValid) {
+      state = state.copyWith(
+        titleError: filterResult.error,
+      );
+      logger.w('Exchange blocked (Local): NGワード検出 - ${state.title}');
+      return;
+    }
+
+    // ステップ2: AIモデレーション（Perspective API）
+    try {
+      final moderationResult = await _moderationService.moderate(state.title);
+      if (!moderationResult.isAllowed) {
+        state = state.copyWith(
+          titleError: moderationResult.userMessage,
+        );
+        logger.w(
+          'Exchange blocked (AI): ${moderationResult.blockReason} - ${state.title}',
+        );
+        return;
+      }
+    } catch (e) {
+      // AIモデレーションが失敗してもローカルチェックが通っていれば続行
+      logger.w('AIモデレーション失敗、ローカルチェックのみで続行: $e');
+    }
+
     state = state.copyWith(
       isExchanging: true,
       errorMessage: null,
@@ -146,7 +208,20 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
     try {
       // Color から int (RGB) に変換
-      final pixelValues = state.pixels.map((color) => color.value & 0xFFFFFF).toList();
+      final pixelValues =
+          state.pixels.map((color) => color.value & 0xFFFFFF).toList();
+
+      // 自分が作成したドット絵をアルバムに保存
+      final myArt = PixelArt(
+        id: const Uuid().v4(),
+        pixels: pixelValues,
+        title: state.title,
+        createdAt: DateTime.now(),
+        source: PixelArtSource.local,
+        gridSize: state.gridSize,
+      );
+      await _localStorage.addToAlbum(myArt);
+      logger.i('Saved my art to album: ${myArt.id}');
 
       final result = await _pixelArtRepository.exchange(
         pixels: pixelValues,
@@ -203,5 +278,9 @@ class HomeViewModel extends StateNotifier<HomeState> {
 /// ホームViewModelプロバイダー
 final homeViewModelProvider =
     StateNotifierProvider<HomeViewModel, HomeState>((ref) {
-  return HomeViewModel(ref.watch(pixelArtRepositoryProvider));
+  return HomeViewModel(
+    ref.watch(pixelArtRepositoryProvider),
+    ref.watch(localStorageProvider),
+    ref.watch(moderationServiceProvider),
+  );
 });

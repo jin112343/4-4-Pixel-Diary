@@ -5,10 +5,15 @@ import '../../../core/utils/logger.dart';
 
 /// 認証インターセプター
 class AuthInterceptor extends Interceptor {
-  final String? deviceId;
+  String? _deviceId;
   String? _accessToken;
 
-  AuthInterceptor({this.deviceId});
+  AuthInterceptor({String? deviceId}) : _deviceId = deviceId;
+
+  /// デバイスIDを設定
+  void setDeviceId(String? id) {
+    _deviceId = id;
+  }
 
   /// アクセストークンを設定
   void setAccessToken(String? token) {
@@ -18,8 +23,8 @@ class AuthInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // デバイスIDをヘッダーに追加
-    if (deviceId != null) {
-      options.headers[ApiConstants.deviceIdHeader] = deviceId;
+    if (_deviceId != null) {
+      options.headers[ApiConstants.deviceIdHeader] = _deviceId;
     }
 
     // アクセストークンをヘッダーに追加

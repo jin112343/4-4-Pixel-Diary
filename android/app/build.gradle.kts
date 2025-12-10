@@ -30,11 +30,39 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            // リリース署名設定
+            // 本番ビルド時は以下の環境変数を設定してください：
+            // - KEYSTORE_PATH: キーストアファイルのパス
+            // - KEYSTORE_PASSWORD: キーストアのパスワード
+            // - KEY_ALIAS: キーのエイリアス
+            // - KEY_PASSWORD: キーのパスワード
+            storeFile = System.getenv("KEYSTORE_PATH")?.let { file(it) }
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 環境変数が設定されている場合はリリース署名を使用
+            // 設定されていない場合はデバッグ署名を使用（開発時のみ）
+            signingConfig = if (System.getenv("KEYSTORE_PATH") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("⚠️ WARNING: Using debug signing for release build. Set KEYSTORE_* environment variables for production.")
+                signingConfigs.getByName("debug")
+            }
+
+            // R8/ProGuard コード難読化・最適化設定
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

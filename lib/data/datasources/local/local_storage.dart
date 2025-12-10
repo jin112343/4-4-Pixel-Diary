@@ -16,17 +16,67 @@ class LocalStorage {
   Box<Map>? _userBox;
   Box<Map>? _settingsBox;
 
+  bool _isInitialized = false;
+
+  /// 初期化済みかどうか
+  bool get isInitialized => _isInitialized;
+
   /// 初期化
   Future<void> init() async {
+    // 既に初期化済みの場合はスキップ
+    if (_isInitialized) {
+      logger.d('LocalStorage already initialized, skipping');
+      return;
+    }
+
     try {
-      _pixelArtBox = await Hive.openBox<Map>(_pixelArtBoxName);
-      _albumBox = await Hive.openBox<Map>(_albumBoxName);
-      _userBox = await Hive.openBox<Map>(_userBoxName);
-      _settingsBox = await Hive.openBox<Map>(_settingsBoxName);
+      // 各ボックスを安全に開く（破損時はリカバリー）
+      _pixelArtBox = await _openBoxSafely(_pixelArtBoxName);
+      _albumBox = await _openBoxSafely(_albumBoxName);
+      _userBox = await _openBoxSafely(_userBoxName);
+      _settingsBox = await _openBoxSafely(_settingsBoxName);
+
+      _isInitialized = true;
       logger.i('LocalStorage initialized');
     } catch (e, stackTrace) {
-      logger.e('Failed to initialize LocalStorage', error: e, stackTrace: stackTrace);
+      logger.e(
+        'Failed to initialize LocalStorage',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
+    }
+  }
+
+  /// ボックスを安全に開く（破損時は削除して再作成）
+  Future<Box<Map>> _openBoxSafely(String boxName) async {
+    // 既に開いているボックスがあれば再利用
+    if (Hive.isBoxOpen(boxName)) {
+      return Hive.box<Map>(boxName);
+    }
+
+    try {
+      return await Hive.openBox<Map>(boxName);
+    } catch (e, stackTrace) {
+      logger.w(
+        'Box "$boxName" corrupted, attempting recovery',
+        error: e,
+        stackTrace: stackTrace,
+      );
+
+      // 破損したボックスを削除して再作成
+      try {
+        await Hive.deleteBoxFromDisk(boxName);
+        logger.i('Deleted corrupted box: $boxName');
+        return await Hive.openBox<Map>(boxName);
+      } catch (deleteError, deleteStackTrace) {
+        logger.e(
+          'Failed to recover box "$boxName"',
+          error: deleteError,
+          stackTrace: deleteStackTrace,
+        );
+        rethrow;
+      }
     }
   }
 
@@ -91,7 +141,11 @@ class LocalStorage {
 
   /// ユーザーを保存
   Future<void> saveUser(AnonymousUser user) async {
-    await _userBox?.put('current', user.toJson());
+    // ネストされたオブジェクトも含めて完全にJSONに変換
+    final json = user.toJson();
+    // settings を明示的に toJson() で変換
+    json['settings'] = user.settings.toJson();
+    await _userBox?.put('current', json);
   }
 
   /// ユーザーを取得
@@ -137,5 +191,15 @@ class LocalStorage {
     await _albumBox?.close();
     await _userBox?.close();
     await _settingsBox?.close();
+  }
+
+  /// 初期化状態をリセット（再初期化を許可）
+  void resetInitializationState() {
+    _isInitialized = false;
+    _pixelArtBox = null;
+    _albumBox = null;
+    _userBox = null;
+    _settingsBox = null;
+    logger.d('LocalStorage initialization state reset');
   }
 }

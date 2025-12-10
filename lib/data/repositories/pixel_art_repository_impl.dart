@@ -51,7 +51,33 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
       );
 
       // レスポンスをパース
-      final receivedArt = PixelArt.fromJson(response.data as Map<String, dynamic>);
+      // サーバーレスポンス形式: { success: bool, data: { received: PixelArt, sent: PixelArt } | { status: 'pending', artId: string } }
+      final responseData = response.data as Map<String, dynamic>;
+
+      if (responseData['success'] != true) {
+        final error = responseData['error'] as Map<String, dynamic>?;
+        return Left(ServerFailure(
+          error?['message'] as String? ?? '交換に失敗しました',
+          error?['code'] as String?,
+        ));
+      }
+
+      final data = responseData['data'] as Map<String, dynamic>;
+
+      // ペンディング状態の場合（マッチング相手がいない）
+      if (data['status'] == 'pending') {
+        logger.i('Exchange pending: artId=${data['artId']}');
+        return const Left(ServerFailure(
+          '交換相手を探しています。しばらくお待ちください。',
+          'PENDING',
+        ));
+      }
+
+      // マッチング成功の場合
+      final receivedData = data['received'] as Map<String, dynamic>;
+
+      // サーバーのフィールド名をFlutterのエンティティに変換
+      final receivedArt = _parsePixelArtFromServer(receivedData);
 
       // ローカルに保存
       await _localStorage.addToAlbum(receivedArt);
@@ -66,6 +92,20 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
       logger.e('Exchange failed', error: e, stackTrace: stackTrace);
       return const Left(UnknownFailure());
     }
+  }
+
+  /// サーバーのPixelArtレスポンスをFlutterのエンティティに変換
+  PixelArt _parsePixelArtFromServer(Map<String, dynamic> data) {
+    return PixelArt(
+      id: data['id'] as String,
+      pixels: (data['pixels'] as List<dynamic>).map((e) => e as int).toList(),
+      title: data['title'] as String? ?? '',
+      createdAt: DateTime.parse(data['createdAt'] as String),
+      receivedAt: DateTime.now(),
+      source: PixelArtSource.server,
+      gridSize: data['gridSize'] as int? ?? 4,
+      ownerId: data['userId'] as String?,
+    );
   }
 
   @override

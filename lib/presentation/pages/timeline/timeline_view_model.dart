@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../core/utils/logger.dart';
-import '../../../domain/entities/comment.dart';
 import '../../../domain/entities/post.dart';
 import '../../../domain/repositories/post_repository.dart';
 import '../../../providers/app_providers.dart';
@@ -33,15 +32,6 @@ class TimelineState with _$TimelineState {
 
     /// さらに読み込み可能か
     @Default(true) bool hasMore,
-
-    /// 選択中の投稿（コメント表示用）
-    Post? selectedPost,
-
-    /// コメントリスト
-    @Default([]) List<Comment> comments,
-
-    /// コメントローディング中かどうか
-    @Default(false) bool isLoadingComments,
   }) = _TimelineState;
 }
 
@@ -83,9 +73,15 @@ class TimelineViewModel extends StateNotifier<TimelineState> {
           logger.e('Failed to load timeline: ${failure.message}');
         },
         (posts) {
+          // おすすめタブの場合はいいね数の多い順にソート
+          final sortedPosts = state.sortOrder == PostSortOrder.popular
+              ? (List<Post>.from(posts)
+                ..sort((a, b) => b.likeCount.compareTo(a.likeCount)))
+              : posts;
+
           state = state.copyWith(
             isLoading: false,
-            posts: refresh ? posts : [...state.posts, ...posts],
+            posts: refresh ? sortedPosts : [...state.posts, ...sortedPosts],
             hasMore: posts.length >= 20,
           );
           logger.i('Timeline loaded: ${posts.length} posts');
@@ -125,9 +121,15 @@ class TimelineViewModel extends StateNotifier<TimelineState> {
           );
         },
         (posts) {
+          // おすすめタブの場合はいいね数の多い順にソート
+          final sortedPosts = state.sortOrder == PostSortOrder.popular
+              ? (List<Post>.from(posts)
+                ..sort((a, b) => b.likeCount.compareTo(a.likeCount)))
+              : posts;
+
           state = state.copyWith(
             isLoadingMore: false,
-            posts: [...state.posts, ...posts],
+            posts: [...state.posts, ...sortedPosts],
             hasMore: posts.length >= 20,
           );
         },
@@ -194,129 +196,6 @@ class TimelineViewModel extends StateNotifier<TimelineState> {
     }
   }
 
-  /// コメントを読み込む
-  Future<void> loadComments(Post post) async {
-    state = state.copyWith(
-      selectedPost: post,
-      isLoadingComments: true,
-      comments: [],
-    );
-
-    try {
-      final result = await _postRepository.getComments(postId: post.id);
-
-      result.fold(
-        (failure) {
-          state = state.copyWith(
-            isLoadingComments: false,
-            errorMessage: failure.message,
-          );
-        },
-        (comments) {
-          state = state.copyWith(
-            isLoadingComments: false,
-            comments: comments,
-          );
-        },
-      );
-    } catch (e, stackTrace) {
-      logger.e('Load comments error', error: e, stackTrace: stackTrace);
-      state = state.copyWith(
-        isLoadingComments: false,
-        errorMessage: 'コメントの読み込みに失敗しました',
-      );
-    }
-  }
-
-  /// コメントを追加
-  Future<bool> addComment(String content) async {
-    final post = state.selectedPost;
-    if (post == null) return false;
-
-    try {
-      final result = await _postRepository.addComment(
-        postId: post.id,
-        content: content,
-      );
-
-      return result.fold(
-        (failure) {
-          state = state.copyWith(errorMessage: failure.message);
-          return false;
-        },
-        (comment) {
-          // コメントリストに追加
-          state = state.copyWith(
-            comments: [...state.comments, comment],
-          );
-
-          // 投稿のコメント数を更新
-          final postIndex = state.posts.indexWhere((p) => p.id == post.id);
-          if (postIndex != -1) {
-            final updatedPost = state.posts[postIndex].copyWith(
-              commentCount: state.posts[postIndex].commentCount + 1,
-            );
-            final updatedPosts = List<Post>.from(state.posts);
-            updatedPosts[postIndex] = updatedPost;
-            state = state.copyWith(
-              posts: updatedPosts,
-              selectedPost: updatedPost,
-            );
-          }
-
-          logger.i('Comment added to post: ${post.id}');
-          return true;
-        },
-      );
-    } catch (e, stackTrace) {
-      logger.e('Add comment error', error: e, stackTrace: stackTrace);
-      state = state.copyWith(errorMessage: 'コメントの投稿に失敗しました');
-      return false;
-    }
-  }
-
-  /// コメントを削除
-  Future<void> deleteComment(String commentId) async {
-    try {
-      final result = await _postRepository.deleteComment(commentId);
-
-      result.fold(
-        (failure) {
-          state = state.copyWith(errorMessage: failure.message);
-        },
-        (_) {
-          // コメントリストから削除
-          state = state.copyWith(
-            comments: state.comments.where((c) => c.id != commentId).toList(),
-          );
-
-          // 投稿のコメント数を更新
-          if (state.selectedPost != null) {
-            final postIndex = state.posts.indexWhere(
-              (p) => p.id == state.selectedPost!.id,
-            );
-            if (postIndex != -1) {
-              final updatedPost = state.posts[postIndex].copyWith(
-                commentCount: state.posts[postIndex].commentCount - 1,
-              );
-              final updatedPosts = List<Post>.from(state.posts);
-              updatedPosts[postIndex] = updatedPost;
-              state = state.copyWith(
-                posts: updatedPosts,
-                selectedPost: updatedPost,
-              );
-            }
-          }
-
-          logger.i('Comment deleted: $commentId');
-        },
-      );
-    } catch (e, stackTrace) {
-      logger.e('Delete comment error', error: e, stackTrace: stackTrace);
-      state = state.copyWith(errorMessage: 'コメントの削除に失敗しました');
-    }
-  }
-
   /// 投稿を通報
   Future<void> reportPost(String postId, String reason) async {
     try {
@@ -337,14 +216,6 @@ class TimelineViewModel extends StateNotifier<TimelineState> {
       logger.e('Report post error', error: e, stackTrace: stackTrace);
       state = state.copyWith(errorMessage: '通報に失敗しました');
     }
-  }
-
-  /// コメント画面を閉じる
-  void closeComments() {
-    state = state.copyWith(
-      selectedPost: null,
-      comments: [],
-    );
   }
 
   /// エラーをクリア

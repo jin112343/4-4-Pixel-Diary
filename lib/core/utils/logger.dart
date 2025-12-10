@@ -4,14 +4,14 @@ import 'package:logger/logger.dart';
 /// print()は使用禁止、このロガーを使用すること
 final logger = Logger(
   printer: PrettyPrinter(
-    methodCount: 2,
-    errorMethodCount: 8,
+    methodCount: 1,
+    errorMethodCount: 5,
     lineLength: 80,
     colors: true,
-    printEmojis: true,
+    printEmojis: false,
     dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
   ),
-  level: Level.debug,
+  level: Level.info, // パフォーマンス向上のためinfoレベルに変更
 );
 
 /// プロダクション用ロガー（最小限のログ）

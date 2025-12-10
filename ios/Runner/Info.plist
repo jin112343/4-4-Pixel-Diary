@@ -45,5 +45,21 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Bluetooth permissions -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>すれ違い通信で近くのユーザーとドット絵を交換するために使用します</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>すれ違い通信で近くのユーザーとドット絵を交換するために使用します</string>
+	<!-- Background modes for Bluetooth and Notifications -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+	<!-- User Notifications -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>すれ違い通知やドット絵交換のお知らせを受け取るために使用します</string>
 </dict>
 </plist>

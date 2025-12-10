@@ -24,13 +24,15 @@ class SecureStorage {
   // ========== Device ID ==========
 
   /// デバイスIDを保存
-  Future<void> saveDeviceId(String deviceId) async {
+  Future<bool> saveDeviceId(String deviceId) async {
     try {
       await _storage.write(key: _deviceIdKey, value: deviceId);
       logger.d('Device ID saved');
+      return true;
     } catch (e, stackTrace) {
       logger.e('Failed to save device ID', error: e, stackTrace: stackTrace);
-      rethrow;
+      // エラーでもアプリは続行可能（次回起動時に再生成される）
+      return false;
     }
   }
 

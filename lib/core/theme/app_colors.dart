@@ -37,12 +37,19 @@ class AppColors {
   /// テキスト色（ライト）
   static const Color textPrimaryLight = Color(0xFF1E293B);
   static const Color textSecondaryLight = Color(0xFF64748B);
+  static const Color textTertiaryLight = Color(0xFF94A3B8);
 
   /// テキスト色（ダーク）
   static const Color textPrimaryDark = Color(0xFFF1F5F9);
   static const Color textSecondaryDark = Color(0xFF94A3B8);
+  static const Color textTertiaryDark = Color(0xFF64748B);
 
   /// ボーダー色
   static const Color borderLight = Color(0xFFE2E8F0);
   static const Color borderDark = Color(0xFF334155);
+
+  /// 共通カラー（テーマ非依存またはゲッター経由）
+  static Color get textSecondary => textSecondaryLight;
+  static Color get textTertiary => textTertiaryLight;
+  static Color get divider => borderLight;
 }

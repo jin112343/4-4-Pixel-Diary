@@ -36,6 +36,18 @@ class SecurityStatus {
 class SecurityService {
   /// セキュリティチェックを実行
   Future<SecurityStatus> checkSecurity() async {
+    // WebではPlatform APIが未サポートのためスキップ
+    if (kIsWeb) {
+      logger.i('Security check skipped on web');
+      return SecurityStatus(
+        isJailbroken: false,
+        isRooted: false,
+        isDeveloperMode: false,
+        isEmulator: false,
+        warnings: const [],
+      );
+    }
+
     final warnings = <String>[];
     var isJailbroken = false;
     var isRooted = false;

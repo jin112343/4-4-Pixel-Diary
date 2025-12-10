@@ -13,10 +13,12 @@ class PixelArtDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _PixelArtPainter(
-        pixels: pixels,
-        gridSize: gridSize,
+    return SizedBox.expand(
+      child: CustomPaint(
+        painter: _PixelArtPainter(
+          pixels: pixels,
+          gridSize: gridSize,
+        ),
       ),
     );
   }
@@ -40,8 +42,12 @@ class _PixelArtPainter extends CustomPainter {
         final index = i * gridSize + j;
         final colorValue = index < pixels.length ? pixels[index] : 0xFFFFFFFF;
 
+        // 24ビット値（0xRRGGBB）の場合はアルファ値を追加
+        final actualColor =
+            colorValue <= 0xFFFFFF ? colorValue | 0xFF000000 : colorValue;
+
         final paint = Paint()
-          ..color = Color(colorValue)
+          ..color = Color(actualColor)
           ..style = PaintingStyle.fill;
 
         final rect = Rect.fromLTWH(

@@ -8,14 +8,23 @@ import 'api_interceptor.dart';
 /// APIクライアント
 class ApiClient {
   late final Dio _dio;
-  final String? _deviceId;
+  late final AuthInterceptor _authInterceptor;
+  final void Function()? onRequestStart;
+  final void Function()? onRequestEnd;
 
-  ApiClient({String? deviceId}) : _deviceId = deviceId {
+  ApiClient({
+    String? deviceId,
+    this.onRequestStart,
+    this.onRequestEnd,
+  }) {
+    final baseUrl = ApiConstants.baseUrl;
+    logger.i('ApiClient initialized with baseUrl: $baseUrl');
+
     _dio = Dio(
       BaseOptions(
-        baseUrl: ApiConstants.baseUrl,
-        connectTimeout: Duration(seconds: AppConstants.apiTimeoutSeconds),
-        receiveTimeout: Duration(seconds: AppConstants.apiTimeoutSeconds),
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: AppConstants.apiTimeoutSeconds),
+        receiveTimeout: const Duration(seconds: AppConstants.apiTimeoutSeconds),
         headers: {
           'Content-Type': ApiConstants.contentType,
           'Accept': ApiConstants.contentType,
@@ -23,11 +32,28 @@ class ApiClient {
       ),
     );
 
+    _authInterceptor = AuthInterceptor(deviceId: deviceId);
+
     _dio.interceptors.addAll([
-      AuthInterceptor(deviceId: _deviceId),
+      _authInterceptor,
+      LoadingInterceptor(
+        onRequestStart: onRequestStart,
+        onRequestEnd: onRequestEnd,
+      ),
       LoggingInterceptor(),
       RetryInterceptor(dio: _dio),
     ]);
+  }
+
+  /// デバイスIDを設定
+  void setDeviceId(String? deviceId) {
+    _authInterceptor.setDeviceId(deviceId);
+    logger.i('ApiClient deviceId updated');
+  }
+
+  /// アクセストークンを設定
+  void setAccessToken(String? token) {
+    _authInterceptor.setAccessToken(token);
   }
 
   /// GET リクエスト
@@ -86,6 +112,45 @@ class ApiClient {
       queryParameters: queryParameters,
       options: options,
     );
+  }
+}
+
+/// ローディングインターセプター
+class LoadingInterceptor extends Interceptor {
+  final void Function()? onRequestStart;
+  final void Function()? onRequestEnd;
+  int _requestCount = 0;
+
+  LoadingInterceptor({
+    this.onRequestStart,
+    this.onRequestEnd,
+  });
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    _requestCount++;
+    if (_requestCount == 1) {
+      onRequestStart?.call();
+    }
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    _requestCount--;
+    if (_requestCount == 0) {
+      onRequestEnd?.call();
+    }
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    _requestCount--;
+    if (_requestCount == 0) {
+      onRequestEnd?.call();
+    }
+    handler.next(err);
   }
 }
 

@@ -84,9 +84,14 @@ class CalendarViewModel extends StateNotifier<CalendarState> {
           logger.e('Failed to load month data: ${failure.message}');
         },
         (pixelArts) {
+          // 自分で作成したドット絵のみをフィルタリング
+          final localArts = pixelArts
+              .where((art) => art.source == PixelArtSource.local)
+              .toList();
+
           // 日付ごとの作品数をカウント
           final daysMap = <int, int>{};
-          for (final art in pixelArts) {
+          for (final art in localArts) {
             final day = art.createdAt.day;
             daysMap[day] = (daysMap[day] ?? 0) + 1;
           }
@@ -114,12 +119,17 @@ class CalendarViewModel extends StateNotifier<CalendarState> {
           logger.e('Failed to load date data: ${failure.message}');
         },
         (pixelArts) {
+          // 自分で作成したドット絵のみをフィルタリング
+          final localArts = pixelArts
+              .where((art) => art.source == PixelArtSource.local)
+              .toList();
+
           state = state.copyWith(
             isLoading: false,
-            selectedDatePixelArts: pixelArts,
+            selectedDatePixelArts: localArts,
           );
           logger.i(
-            'Loaded ${pixelArts.length} pixel arts for '
+            'Loaded ${localArts.length} local pixel arts for '
             '${state.selectedDate.year}/${state.selectedDate.month}/'
             '${state.selectedDate.day}',
           );

@@ -576,12 +576,62 @@ class BleService {
         throw Exception('Characteristics not found');
       }
 
+      // MTUサイズを交渉
+      try {
+        final mtu = await device.requestMtu(BleConstants.mtuSize);
+        logger.i('MTU negotiated: $mtu bytes');
+      } catch (e) {
+        logger.w('MTU negotiation failed, using default', error: e);
+      }
+
+      // 【重要】Notifyを先に有効化してから送信
+      await readChar.setNotifyValue(true);
+
+      // Notify購読を設定
+      final completer = Completer<List<int>>();
+      StreamSubscription<List<int>>? subscription;
+
+      subscription = readChar.lastValueStream.listen((value) {
+        if (value.isNotEmpty && !completer.isCompleted) {
+          logger.d('Received notify data: ${value.length} bytes');
+          completer.complete(value);
+          subscription?.cancel();
+        }
+      });
+
+      // Notify購読の確立を待つ
+      await Future.delayed(const Duration(milliseconds: 200));
+
       // 自分のデータを送信
       await _sendPixelArt(writeChar);
 
-      // 相手のデータを受信
-      final receivedArt = await _receivePixelArt(readChar);
+      // 相手のデータを受信（タイムアウト付き）
+      final value = await completer.future.timeout(
+        Duration(seconds: BleConstants.exchangeTimeout),
+        onTimeout: () {
+          subscription?.cancel();
+          throw TimeoutException('Receive timeout after ${BleConstants.exchangeTimeout}s');
+        },
+      );
 
+      // データを復号化・パース
+      final encrypted = utf8.decode(value);
+      final decrypted = _crypto.decrypt(encrypted);
+
+      if (decrypted == null) {
+        throw Exception('Decryption failed');
+      }
+
+      final json = jsonDecode(decrypted) as Map<String, dynamic>;
+      final art = PixelArt.fromJson(json);
+
+      // ソースをbluetoothに設定
+      final receivedArt = art.copyWith(
+        source: PixelArtSource.bluetooth,
+        receivedAt: DateTime.now(),
+      );
+
+      logger.d('Pixel art received and parsed successfully');
       return receivedArt;
     } catch (e, stackTrace) {
       logger.e('_exchangeData failed', error: e, stackTrace: stackTrace);
@@ -613,58 +663,7 @@ class BleService {
     }
   }
 
-  Future<PixelArt?> _receivePixelArt(
-    BluetoothCharacteristic characteristic,
-  ) async {
-    try {
-      // Notifyを有効化
-      await characteristic.setNotifyValue(true);
-
-      // データを受信（タイムアウト付き）
-      final completer = Completer<List<int>>();
-      StreamSubscription<List<int>>? subscription;
-
-      subscription = characteristic.lastValueStream.listen((value) {
-        if (value.isNotEmpty && !completer.isCompleted) {
-          completer.complete(value);
-          subscription?.cancel();
-        }
-      });
-
-      // タイムアウト
-      final value = await completer.future.timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          subscription?.cancel();
-          throw TimeoutException('Receive timeout');
-        },
-      );
-
-      // 復号化
-      final encrypted = utf8.decode(value);
-      final decrypted = _crypto.decrypt(encrypted);
-
-      if (decrypted == null) {
-        throw Exception('Decryption failed');
-      }
-
-      // JSONからPixelArtに変換
-      final json = jsonDecode(decrypted) as Map<String, dynamic>;
-      final art = PixelArt.fromJson(json);
-
-      // ソースをbluetoothに設定
-      final receivedArt = art.copyWith(
-        source: PixelArtSource.bluetooth,
-        receivedAt: DateTime.now(),
-      );
-
-      logger.d('Pixel art received');
-      return receivedArt;
-    } catch (e, stackTrace) {
-      logger.e('_receivePixelArt failed', error: e, stackTrace: stackTrace);
-      return null;
-    }
-  }
+  // _receivePixelArt is now integrated into _exchangeData for better timing control
 
   Future<void> _disconnect() async {
     try {

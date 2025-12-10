@@ -191,7 +191,7 @@ class _CommentSheetState extends ConsumerState<CommentSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide(color: AppColors.primary),
+                  borderSide: const BorderSide(color: AppColors.primary),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -210,7 +210,7 @@ class _CommentSheetState extends ConsumerState<CommentSheet> {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(Icons.send, color: AppColors.primary),
+                : const Icon(Icons.send, color: AppColors.primary),
             onPressed: _isSubmitting ? null : _submitComment,
           ),
         ],

@@ -194,9 +194,11 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog>
             ),
 
             // タブコンテンツ
+            // スワイプでのタブ切り替えを無効化（スライダー操作と干渉するため）
             Expanded(
               child: TabBarView(
                 controller: _tabController,
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   // カラーホイール（HUEリングピッカー）
                   _ColorWheelTab(

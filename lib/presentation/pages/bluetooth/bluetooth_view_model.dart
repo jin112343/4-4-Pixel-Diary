@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../core/utils/logger.dart';
+import '../../../data/datasources/local/local_storage.dart';
 import '../../../domain/entities/pixel_art.dart';
+import '../../../providers/app_providers.dart';
+import '../../../services/bluetooth/ble_dual_role_service.dart';
 import '../../../services/bluetooth/ble_pairing_service.dart';
+import '../../../services/bluetooth/ble_peripheral_native.dart';
 import '../../../services/bluetooth/ble_service.dart';
 
 part 'bluetooth_view_model.freezed.dart';
@@ -80,16 +84,36 @@ class BluetoothState with _$BluetoothState {
 
     /// ペアリングダイアログを表示するか
     @Default(false) bool showPairingDialog,
+
+    // ========== Peripheral関連（Dual Role追加） ==========
+
+    /// Dual Mode（Central + Peripheral）が動作中か
+    @Default(false) bool isDualMode,
+
+    /// Peripheralアドバタイズ中か
+    @Default(false) bool isAdvertising,
+
+    /// Peripheral側の接続デバイス数
+    @Default(0) int peripheralConnectedCount,
+
+    /// アドバタイズに使用するニックネーム
+    String? nickname,
   }) = _BluetoothState;
 }
 
 /// Bluetooth画面のViewModel
 class BluetoothViewModel extends StateNotifier<BluetoothState> {
-  BluetoothViewModel(this._bleService) : super(const BluetoothState()) {
+  BluetoothViewModel(
+    this._bleService,
+    this._dualRoleService,
+    this._localStorage,
+  ) : super(const BluetoothState()) {
     _initialize();
   }
 
   final BleService _bleService;
+  final BleDualRoleService _dualRoleService;
+  final LocalStorage _localStorage;
 
   StreamSubscription<BleConnectionState>? _connectionStateSubscription;
   StreamSubscription<List<DiscoveredDevice>>? _discoveredDevicesSubscription;
@@ -98,37 +122,66 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
   StreamSubscription<PairingState>? _pairingStateSubscription;
   StreamSubscription<PairingInfo>? _pairingRequiredSubscription;
 
+  // Dual Role用のサブスクリプション
+  StreamSubscription<PixelArt>? _dualRoleReceivedArtSubscription;
+
   /// 初期化
   Future<void> _initialize() async {
-    // Bluetooth利用可能状態をチェック
-    final isAvailable = await _bleService.isBluetoothAvailable();
-    state = state.copyWith(isBluetoothAvailable: isAvailable);
+    try {
+      // Bluetooth利用可能状態をチェック
+      final isAvailable = await _bleService.isBluetoothAvailable();
+      state = state.copyWith(isBluetoothAvailable: isAvailable);
 
-    // ストリームを購読
-    _connectionStateSubscription =
-        _bleService.connectionStateStream.listen(_onConnectionStateChanged);
-    _discoveredDevicesSubscription =
-        _bleService.discoveredDevicesStream.listen(_onDevicesDiscovered);
-    _receivedArtSubscription =
-        _bleService.receivedArtStream.listen(_onArtReceived);
-    _errorSubscription = _bleService.errorStream.listen(_onError);
-    _pairingStateSubscription =
-        _bleService.pairingStateStream.listen(_onPairingStateChanged);
-    _pairingRequiredSubscription =
-        _bleService.pairingRequiredStream.listen(_onPairingRequired);
+      // ストリームを購読
+      _connectionStateSubscription =
+          _bleService.connectionStateStream.listen(_onConnectionStateChanged);
+      _discoveredDevicesSubscription =
+          _bleService.discoveredDevicesStream.listen(_onDevicesDiscovered);
+      _receivedArtSubscription =
+          _bleService.receivedArtStream.listen(_onArtReceived);
+      _errorSubscription = _bleService.errorStream.listen(_onError);
+      _pairingStateSubscription =
+          _bleService.pairingStateStream.listen(_onPairingStateChanged);
+      _pairingRequiredSubscription =
+          _bleService.pairingRequiredStream.listen(_onPairingRequired);
 
-    // 権限チェック
-    await checkPermission();
+      // 権限チェック
+      await checkPermission();
+    } catch (e, stackTrace) {
+      logger.e(
+        'BluetoothViewModel initialization failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // 初期化エラーでも画面は表示できるように、デフォルト状態のまま継続
+      state = state.copyWith(
+        isBluetoothAvailable: false,
+        errorMessage: 'Bluetooth初期化に失敗しました',
+      );
+    }
   }
 
   /// 権限をチェック・リクエスト
   Future<void> checkPermission() async {
-    final status = await _bleService.checkAndRequestPermission();
-    state = state.copyWith(
-      permissionStatus: status,
-      isPermissionDenied: status == BlePermissionStatus.denied ||
-          status == BlePermissionStatus.permanentlyDenied,
-    );
+    try {
+      final status = await _bleService.checkAndRequestPermission();
+      state = state.copyWith(
+        permissionStatus: status,
+        isPermissionDenied: status == BlePermissionStatus.denied ||
+            status == BlePermissionStatus.permanentlyDenied,
+      );
+    } catch (e, stackTrace) {
+      logger.e(
+        'checkPermission failed',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // 権限チェックに失敗しても画面は表示できるように
+      state = state.copyWith(
+        permissionStatus: BlePermissionStatus.unknown,
+        isPermissionDenied: false,
+      );
+    }
   }
 
   // ========== Event Handlers ==========
@@ -147,9 +200,22 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
       successMessage: 'ドット絵を受け取りました！',
     );
 
+    // アルバムに保存
+    _saveToAlbum(art);
+
     // 履歴に追加
     if (state.artToExchange != null) {
       _addToHistory(state.artToExchange!, art);
+    }
+  }
+
+  /// 受信したドット絵をアルバムに保存
+  Future<void> _saveToAlbum(PixelArt art) async {
+    try {
+      await _localStorage.addToAlbum(art);
+      logger.i('Saved received art to album: ${art.id}');
+    } catch (e, stackTrace) {
+      logger.e('Failed to save to album', error: e, stackTrace: stackTrace);
     }
   }
 
@@ -209,6 +275,11 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
     state = state.copyWith(exchangeMode: newMode);
   }
 
+  /// ニックネームを設定
+  void setNickname(String nickname) {
+    state = state.copyWith(nickname: nickname);
+  }
+
   /// スキャンを開始
   Future<void> startScanning() async {
     if (state.artToExchange == null) {
@@ -238,6 +309,109 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
     await _bleService.stopScanning();
   }
 
+  // ========== Dual Role Methods ==========
+
+  /// Dual Mode（Central + Peripheral）を開始
+  Future<void> startDualMode() async {
+    if (state.artToExchange == null) {
+      state = state.copyWith(errorMessage: '交換するドット絵を選択してください');
+      return;
+    }
+
+    if (!state.isBluetoothAvailable) {
+      state = state.copyWith(errorMessage: 'Bluetoothが利用できません');
+      return;
+    }
+
+    final nickname = state.nickname ?? 'ゲスト';
+
+    clearMessages();
+
+    try {
+      // Dual Role Serviceを使用してCentral + Peripheral同時起動
+      await _dualRoleService.startDualMode(
+        nickname: nickname,
+        artToExchange: state.artToExchange!,
+      );
+
+      // Dual Role受信データを監視
+      _dualRoleReceivedArtSubscription =
+          _dualRoleService.receivedArtStream.listen(_onArtReceived);
+
+      // 状態を更新
+      state = state.copyWith(
+        isDualMode: true,
+        connectionState: BleConnectionState.scanning,
+      );
+
+      // Peripheral状態を定期的にポーリング
+      _startPeripheralStatePolling();
+
+      logger.i('Dual mode started');
+    } catch (e, stackTrace) {
+      logger.e('startDualMode failed', error: e, stackTrace: stackTrace);
+      state = state.copyWith(errorMessage: 'Dual Mode開始に失敗しました');
+    }
+  }
+
+  /// Dual Modeを停止
+  Future<void> stopDualMode() async {
+    try {
+      await _dualRoleService.stopDualMode();
+      await _dualRoleReceivedArtSubscription?.cancel();
+      _dualRoleReceivedArtSubscription = null;
+
+      _stopPeripheralStatePolling();
+
+      state = state.copyWith(
+        isDualMode: false,
+        isAdvertising: false,
+        peripheralConnectedCount: 0,
+        connectionState: BleConnectionState.disconnected,
+      );
+
+      logger.i('Dual mode stopped');
+    } catch (e, stackTrace) {
+      logger.e('stopDualMode failed', error: e, stackTrace: stackTrace);
+      state = state.copyWith(errorMessage: 'Dual Mode停止に失敗しました');
+    }
+  }
+
+  Timer? _peripheralStatePollingTimer;
+
+  /// Peripheral状態の定期ポーリング開始
+  void _startPeripheralStatePolling() {
+    _peripheralStatePollingTimer?.cancel();
+    _peripheralStatePollingTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _updatePeripheralState(),
+    );
+  }
+
+  /// Peripheral状態の定期ポーリング停止
+  void _stopPeripheralStatePolling() {
+    _peripheralStatePollingTimer?.cancel();
+    _peripheralStatePollingTimer = null;
+  }
+
+  /// Peripheral状態を更新
+  Future<void> _updatePeripheralState() async {
+    if (!state.isDualMode) return;
+
+    try {
+      final isAdvertising = await _dualRoleService.peripheralAdvertising;
+      final connectedCount = await _dualRoleService.peripheralConnectedCount;
+
+      state = state.copyWith(
+        isAdvertising: isAdvertising,
+        peripheralConnectedCount: connectedCount,
+      );
+    } catch (e) {
+      // ポーリング中のエラーは無視
+      logger.d('Peripheral state update error: $e');
+    }
+  }
+
   /// デバイスを選択
   void selectDevice(String deviceId) {
     state = state.copyWith(selectedDeviceId: deviceId);
@@ -262,6 +436,9 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
           successMessage: 'ドット絵を交換しました！',
           selectedDeviceId: null,
         );
+
+        // アルバムに保存
+        _saveToAlbum(receivedArt);
 
         // 履歴に追加
         if (state.artToExchange != null) {
@@ -292,6 +469,9 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
           receivedArt: receivedArt,
           successMessage: 'ドット絵を交換しました！',
         );
+
+        // アルバムに保存
+        _saveToAlbum(receivedArt);
 
         // 履歴に追加
         _addToHistory(state.artToExchange!, receivedArt);
@@ -405,11 +585,13 @@ class BluetoothViewModel extends StateNotifier<BluetoothState> {
     _errorSubscription?.cancel();
     _pairingStateSubscription?.cancel();
     _pairingRequiredSubscription?.cancel();
+    _dualRoleReceivedArtSubscription?.cancel();
+    _peripheralStatePollingTimer?.cancel();
     super.dispose();
   }
 }
 
-/// BleServiceプロバイダー
+/// BleServiceプロバイダー（ローカル用、app_providersのappBleServiceProviderと重複）
 final bleServiceProvider = Provider<BleService>((ref) {
   final service = BleService();
   ref.onDispose(() => service.dispose());
@@ -419,5 +601,20 @@ final bleServiceProvider = Provider<BleService>((ref) {
 /// BluetoothViewModelプロバイダー
 final bluetoothViewModelProvider =
     StateNotifierProvider<BluetoothViewModel, BluetoothState>((ref) {
-  return BluetoothViewModel(ref.watch(bleServiceProvider));
+  // app_providersから取得
+  final bleService = ref.watch(bleServiceProvider);
+  final localStorage = ref.watch(localStorageProvider);
+
+  // BleDualRoleServiceを手動で構築（app_providersにもあるが、依存関係を明示）
+  // 注: 本来はapp_providersのbleDualRoleServiceProviderを使用すべきだが、
+  // bluetooth_view_model.dart内で完結させるためにここで構築
+  final dualRoleService = BleDualRoleService(
+    centralService: bleService,
+    peripheralNative: BlePeripheralNative(),
+  );
+
+  // ViewModelの破棄時にDual Roleサービスも破棄
+  ref.onDispose(() => dualRoleService.dispose());
+
+  return BluetoothViewModel(bleService, dualRoleService, localStorage);
 });

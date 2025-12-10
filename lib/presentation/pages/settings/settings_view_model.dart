@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../core/utils/content_filter.dart';
 import '../../../core/utils/logger.dart';
 import '../../../domain/entities/anonymous_user.dart';
 import '../../../providers/app_providers.dart';
+import '../../../providers/moderation_provider.dart';
 import '../../../services/auth/anonymous_auth_service.dart';
+import '../../../services/moderation/moderation_service.dart';
 
 part 'settings_view_model.freezed.dart';
 
@@ -29,11 +32,13 @@ class SettingsState with _$SettingsState {
 
 /// 設定画面のViewModel
 class SettingsViewModel extends StateNotifier<SettingsState> {
-  SettingsViewModel(this._authService) : super(const SettingsState()) {
+  SettingsViewModel(this._authService, this._moderationService)
+      : super(const SettingsState()) {
     _loadUser();
   }
 
   final AnonymousAuthService _authService;
+  final ModerationService _moderationService;
 
   /// ユーザー情報を読み込む
   Future<void> _loadUser() async {
@@ -55,16 +60,49 @@ class SettingsViewModel extends StateNotifier<SettingsState> {
 
   /// ニックネームを更新
   Future<void> updateNickname(String? nickname) async {
-    if (nickname != null && nickname.length > 5) {
+    // 空の場合はそのまま更新（ニックネーム削除）
+    if (nickname == null || nickname.isEmpty) {
+      await _updateNicknameInternal(null);
+      return;
+    }
+
+    // 文字数チェック
+    if (nickname.length > 5) {
       state = state.copyWith(errorMessage: 'ニックネームは5文字以内で入力してください');
       return;
     }
 
+    // ステップ1: ローカルフィルタ（超厳格チェック）
+    final filterResult = NicknameFilter.filter(nickname);
+    if (!filterResult.isValid) {
+      state = state.copyWith(errorMessage: filterResult.error);
+      logger.w('Nickname blocked (Local): NGワード検出 - $nickname');
+      return;
+    }
+
+    // ステップ2: AIモデレーション（Perspective API）
+    try {
+      final moderationResult = await _moderationService.moderate(nickname);
+      if (!moderationResult.isAllowed) {
+        state = state.copyWith(errorMessage: moderationResult.userMessage);
+        logger.w(
+          'Nickname blocked (AI): ${moderationResult.blockReason} - $nickname',
+        );
+        return;
+      }
+    } catch (e) {
+      // AIモデレーションが失敗してもローカルチェックが通っていれば続行
+      logger.w('AIモデレーション失敗、ローカルチェックのみで続行: $e');
+    }
+
+    await _updateNicknameInternal(nickname);
+  }
+
+  /// ニックネーム更新の内部処理
+  Future<void> _updateNicknameInternal(String? nickname) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final updatedUser = await _authService.updateNickname(
-        nickname?.isEmpty == true ? null : nickname,
-      );
+      final updatedUser = await _authService.updateNickname(nickname);
       state = state.copyWith(
         isLoading: false,
         user: updatedUser,
@@ -171,5 +209,6 @@ class SettingsViewModel extends StateNotifier<SettingsState> {
 final settingsViewModelProvider =
     StateNotifierProvider<SettingsViewModel, SettingsState>((ref) {
   final authService = ref.watch(authServiceProvider);
-  return SettingsViewModel(authService);
+  final moderationService = ref.watch(moderationServiceProvider);
+  return SettingsViewModel(authService, moderationService);
 });

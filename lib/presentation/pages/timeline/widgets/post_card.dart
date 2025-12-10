@@ -8,14 +8,12 @@ import 'pixel_art_display.dart';
 class PostCard extends StatelessWidget {
   final Post post;
   final VoidCallback onLike;
-  final VoidCallback onComment;
   final VoidCallback onReport;
 
   const PostCard({
     super.key,
     required this.post,
     required this.onLike,
-    required this.onComment,
     required this.onReport,
   });
 
@@ -164,14 +162,6 @@ class PostCard extends StatelessWidget {
             iconColor: post.isLikedByMe ? Colors.red : null,
             label: post.likeCount.toString(),
             onTap: onLike,
-          ),
-          const SizedBox(width: 16),
-
-          // コメントボタン
-          _ActionButton(
-            icon: Icons.chat_bubble_outline,
-            label: post.commentCount.toString(),
-            onTap: onComment,
           ),
         ],
       ),
