@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import '../../../core/constants/color_constants.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../services/bluetooth/ble_pairing_service.dart';
 import '../../../services/bluetooth/ble_service.dart';
+import '../../widgets/web_unsupported_dialog.dart';
 import '../home/home_view_model.dart';
 import 'bluetooth_view_model.dart';
 
@@ -35,6 +37,20 @@ class _BluetoothPageState extends ConsumerState<BluetoothPage>
 
   @override
   Widget build(BuildContext context) {
+    // Web環境では非対応ビューを表示
+    if (kIsWeb) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('すれ違い通信'),
+        ),
+        body: const WebUnsupportedView(
+          featureName: 'すれ違い通信',
+          description: 'Bluetooth機能はスマートフォンアプリでのみ利用できます。',
+          iconData: Icons.bluetooth_disabled,
+        ),
+      );
+    }
+
     final state = ref.watch(bluetoothViewModelProvider);
 
     // メッセージ監視
@@ -69,7 +85,7 @@ class _BluetoothPageState extends ConsumerState<BluetoothPage>
 
       // ペアリングダイアログ表示
       if (next.showPairingDialog &&
-          !previous!.showPairingDialog &&
+          (previous == null || !previous.showPairingDialog) &&
           next.pairingInfo != null) {
         _showPairingDialog(context, next.pairingInfo!);
       }
@@ -151,14 +167,30 @@ class _SearchTab extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          // スキャンコントロール
+          // ニックネーム設定
+          _NicknameCard(
+            nickname: state.nickname,
+            onNicknameChanged: (nickname) {
+              ref.read(bluetoothViewModelProvider.notifier).setNickname(nickname);
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // スキャンコントロール（Dual Mode）
           _ScanControlCard(
             state: state,
             onStartScan: () {
-              ref.read(bluetoothViewModelProvider.notifier).startScanning();
+              // ニックネームが未設定の場合はデフォルト値を使用
+              final viewModel = ref.read(bluetoothViewModelProvider.notifier);
+              if (state.nickname == null || state.nickname!.isEmpty) {
+                viewModel.setNickname('ゲスト');
+              }
+              // Dual Mode開始（Central + Peripheral同時動作）
+              viewModel.startDualMode();
             },
             onStopScan: () {
-              ref.read(bluetoothViewModelProvider.notifier).stopScanning();
+              ref.read(bluetoothViewModelProvider.notifier).stopDualMode();
             },
           ),
 
@@ -312,6 +344,77 @@ class _PermissionDeniedView extends StatelessWidget {
   }
 }
 
+/// ニックネーム設定カード
+class _NicknameCard extends StatefulWidget {
+  const _NicknameCard({
+    required this.nickname,
+    required this.onNicknameChanged,
+  });
+
+  final String? nickname;
+  final void Function(String) onNicknameChanged;
+
+  @override
+  State<_NicknameCard> createState() => _NicknameCardState();
+}
+
+class _NicknameCardState extends State<_NicknameCard> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.nickname ?? 'ゲスト');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'ニックネーム',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              maxLength: 5,
+              decoration: InputDecoration(
+                hintText: 'ゲスト',
+                border: const OutlineInputBorder(),
+                counterText: '${_controller.text.length}/5文字',
+                helperText: 'すれ違い時に表示される名前（5文字以内）',
+              ),
+              onChanged: (value) {
+                if (value.length <= 5) {
+                  widget.onNicknameChanged(value);
+                  setState(() {});
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// ドット絵選択カード
 class _ArtSelectionCard extends StatelessWidget {
   const _ArtSelectionCard({
@@ -443,8 +546,7 @@ class _ScanControlCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final viewModel = ref.read(bluetoothViewModelProvider.notifier);
-    final isScanning = viewModel.isScanning;
+    final isActive = state.isDualMode || state.connectionState == BleConnectionState.scanning;
 
     return Card(
       child: Padding(
@@ -456,15 +558,15 @@ class _ScanControlCard extends ConsumerWidget {
 
             const SizedBox(height: 16),
 
-            // スキャンボタン
+            // スキャンボタン（Dual Mode）
             SizedBox(
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
                 onPressed: state.artToExchange == null
                     ? null
-                    : (isScanning ? onStopScan : onStartScan),
-                icon: isScanning
+                    : (isActive ? onStopScan : onStartScan),
+                icon: isActive
                     ? const SizedBox(
                         width: 20,
                         height: 20,
@@ -474,9 +576,9 @@ class _ScanControlCard extends ConsumerWidget {
                         ),
                       )
                     : const Icon(Icons.bluetooth_searching),
-                label: Text(isScanning ? 'スキャン中...' : 'さがす'),
+                label: Text(isActive ? 'すれ違い中...' : 'すれ違いを開始'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isScanning ? Colors.orange : null,
+                  backgroundColor: isActive ? Colors.orange : null,
                 ),
               ),
             ),
@@ -526,6 +628,16 @@ class _ScanControlCard extends ConsumerWidget {
   }
 
   String _getStatusText() {
+    // Dual Mode動作中の場合
+    if (state.isDualMode) {
+      if (state.connectionState == BleConnectionState.connecting ||
+          state.connectionState == BleConnectionState.exchanging) {
+        return 'こうかん中...';
+      }
+      return 'すれ違い中...';
+    }
+
+    // 通常モード
     switch (state.connectionState) {
       case BleConnectionState.disconnected:
         return 'スタンバイ';
@@ -541,6 +653,16 @@ class _ScanControlCard extends ConsumerWidget {
   }
 
   Color _getStatusColor() {
+    // Dual Mode動作中の場合
+    if (state.isDualMode) {
+      if (state.connectionState == BleConnectionState.connecting ||
+          state.connectionState == BleConnectionState.exchanging) {
+        return Colors.purple;
+      }
+      return Colors.green;
+    }
+
+    // 通常モード
     switch (state.connectionState) {
       case BleConnectionState.disconnected:
         return Colors.grey;
