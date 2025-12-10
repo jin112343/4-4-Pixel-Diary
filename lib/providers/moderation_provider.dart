@@ -1,7 +1,59 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants/ng_word_dictionary.dart';
 import '../core/utils/content_filter.dart';
+import '../services/moderation/ai_moderation_service.dart';
 import '../services/moderation/moderation_service.dart';
+
+// ============================================================
+// AI モデレーション設定プロバイダー
+// ============================================================
+
+/// AI モデレーションサービスプロバイダー
+final aiModerationServiceProvider = Provider<AiModerationService>((ref) {
+  final service = AiModerationService.instance;
+
+  // 環境変数からAPIキーを取得して設定
+  const perspectiveApiKey = String.fromEnvironment(
+    'PERSPECTIVE_API_KEY',
+    defaultValue: '',
+  );
+
+  const awsAccessKeyId = String.fromEnvironment(
+    'AWS_ACCESS_KEY_ID',
+    defaultValue: '',
+  );
+
+  const awsSecretAccessKey = String.fromEnvironment(
+    'AWS_SECRET_ACCESS_KEY',
+    defaultValue: '',
+  );
+
+  const awsRegion = String.fromEnvironment(
+    'AWS_REGION',
+    defaultValue: 'us-east-1',
+  );
+
+  // Perspective API設定
+  if (perspectiveApiKey.isNotEmpty) {
+    service.configurePerspective(
+      apiKey: perspectiveApiKey,
+      toxicityThreshold: 0.3, // 任天堂レベル
+      severeToxicityThreshold: 0.2,
+    );
+  }
+
+  // AWS Comprehend設定
+  if (awsAccessKeyId.isNotEmpty && awsSecretAccessKey.isNotEmpty) {
+    service.configureAwsComprehend(
+      accessKeyId: awsAccessKeyId,
+      secretAccessKey: awsSecretAccessKey,
+      region: awsRegion,
+    );
+  }
+
+  return service;
+});
 
 /// モデレーション設定プロバイダー
 final moderationConfigProvider = Provider<ModerationConfig>((ref) {

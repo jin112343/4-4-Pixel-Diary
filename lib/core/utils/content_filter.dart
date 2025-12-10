@@ -10,7 +10,9 @@ import 'text_normalizer.dart';
 /// 2. 完全一致NGワードチェック
 /// 3. 正規化後のNGワードチェック
 /// 4. 正規表現パターンチェック
-/// 5. カテゴリ別重大度評価
+/// 5. カテゴリ別パターンチェック
+/// 6. 変種表現チェック（伏せ字・リートスピーク等）
+/// 7. AI補助分析（オプション）
 class ContentFilter {
   ContentFilter._();
 
@@ -27,10 +29,31 @@ class ContentFilter {
   /// カスタム許可ワード（実行時追加）
   static final List<String> _customAllowWords = [];
 
+  /// カテゴリ別ブロック設定
+  static final Map<NgWordCategory, bool> _categoryBlocking = {
+    NgWordCategory.violence: true,
+    NgWordCategory.sexual: true,
+    NgWordCategory.discrimination: true,
+    NgWordCategory.hate: true,
+    NgWordCategory.profanity: true,
+    NgWordCategory.copyright: true,
+    NgWordCategory.personal: true,
+    NgWordCategory.pattern: true,
+    NgWordCategory.spam: true,
+  };
+
   /// フィルタ厳格度を設定
   static void setStrictness(FilterStrictness strictness) {
     _strictness = strictness;
     logger.i('ContentFilter: 厳格度を ${strictness.name} に設定');
+  }
+
+  /// カテゴリのブロック設定を変更
+  static void setCategoryBlocking(NgWordCategory category, bool block) {
+    _categoryBlocking[category] = block;
+    logger.i(
+      'ContentFilter: ${category.displayName} のブロックを ${block ? "有効" : "無効"} に設定',
+    );
   }
 
   // ============================================================
@@ -60,17 +83,29 @@ class ContentFilter {
     // 層4: 正規表現パターンチェック
     violations.addAll(_checkPatterns(originalText));
 
-    // 層5: 変種表現チェック（厳格モード時のみ）
+    // 層5: カテゴリ別パターンチェック
+    violations.addAll(_checkCategoryPatterns(originalText));
+
+    // 層6: 変種表現チェック（厳格モード時のみ）
     if (_strictness == FilterStrictness.strict ||
         _strictness == FilterStrictness.nintendo) {
       violations.addAll(_checkVariations(text));
     }
 
+    // 層7: 超厳格正規化後のチェック（任天堂モード時のみ）
+    if (_strictness == FilterStrictness.nintendo) {
+      final strictNormalized = TextNormalizer.normalizeStrict(text);
+      violations.addAll(_checkNormalizedMatch(strictNormalized, originalText));
+    }
+
     // 重複除去
     final uniqueViolations = _deduplicateViolations(violations);
 
+    // カテゴリ別フィルタリング
+    final filteredByCategory = _filterByCategory(uniqueViolations);
+
     // 厳格度に基づくフィルタリング
-    final filteredViolations = _filterBySeverity(uniqueViolations);
+    final filteredViolations = _filterBySeverity(filteredByCategory);
 
     return ContentCheckResult(
       isClean: filteredViolations.isEmpty,
@@ -133,10 +168,16 @@ class ContentFilter {
       text.replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), ''),
       // 正規化版
       TextNormalizer.normalize(text),
+      // 軽量正規化版
+      TextNormalizer.normalizeLight(text),
+      // 超厳格正規化版
+      TextNormalizer.normalizeStrict(text),
       // 数字→文字変換版
       TextNormalizer.convertNumbersToChars(text),
       // スペース除去版
       TextNormalizer.removeInterspersedSpaces(text),
+      // 記号除去版
+      TextNormalizer.removeInterspersedPunctuation(text),
     };
 
     // さらに変種を追加
@@ -175,6 +216,7 @@ class ContentFilter {
 
     // パターンマッチもチェック
     violations.addAll(_checkPatterns(originalText));
+    violations.addAll(_checkCategoryPatterns(originalText));
 
     // 重複除去
     final uniqueViolations = _deduplicateViolations(violations);
@@ -297,6 +339,30 @@ class ContentFilter {
     return violations;
   }
 
+  /// カテゴリ別パターンチェック
+  static List<ContentViolation> _checkCategoryPatterns(String text) {
+    final violations = <ContentViolation>[];
+
+    for (final entry in NgWordDictionary.patternMap.entries) {
+      final category = entry.key;
+      final patterns = entry.value;
+
+      for (final pattern in patterns) {
+        final match = pattern.firstMatch(text);
+        if (match != null) {
+          violations.add(ContentViolation(
+            word: match.group(0) ?? 'パターン検出',
+            category: category,
+            matchType: MatchType.categoryPattern,
+            position: match.start,
+          ));
+        }
+      }
+    }
+
+    return violations;
+  }
+
   /// 変種表現チェック（伏せ字、数字置換など）
   static List<ContentViolation> _checkVariations(String text) {
     final violations = <ContentViolation>[];
@@ -364,6 +430,15 @@ class ContentFilter {
     return unique;
   }
 
+  /// カテゴリ別フィルタリング
+  static List<ContentViolation> _filterByCategory(
+    List<ContentViolation> violations,
+  ) {
+    return violations.where((v) {
+      return _categoryBlocking[v.category] ?? true;
+    }).toList();
+  }
+
   /// 厳格度に基づくフィルタリング
   static List<ContentViolation> _filterBySeverity(
     List<ContentViolation> violations,
@@ -423,6 +498,29 @@ class ContentFilter {
       RegExp(r'\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4}'),
       '[電話番号削除]',
     );
+
+    return result;
+  }
+
+  /// 部分マスク（最初と最後の文字を残す）
+  static String maskPartial(String text, {String maskChar = '*'}) {
+    var result = text;
+
+    for (final words in NgWordDictionary.categoryMap.values) {
+      for (final word in words) {
+        if (_isPartOfAllowedWord(text, word)) continue;
+        if (word.length <= 2) continue;
+
+        final pattern = RegExp(RegExp.escape(word), caseSensitive: false);
+        result = result.replaceAllMapped(pattern, (match) {
+          final matched = match.group(0)!;
+          if (matched.length <= 2) return maskChar * matched.length;
+          return matched[0] +
+              maskChar * (matched.length - 2) +
+              matched[matched.length - 1];
+        });
+      }
+    }
 
     return result;
   }
@@ -502,6 +600,7 @@ class ContentFilter {
       customNgWords: _customNgWords.length,
       customAllowWords: _customAllowWords.length,
       strictness: _strictness,
+      categoryStats: NgWordDictionary.stats,
     );
   }
 }
@@ -558,6 +657,7 @@ enum MatchType {
   exact,
   normalized,
   pattern,
+  categoryPattern,
   variation,
 }
 
@@ -570,6 +670,8 @@ extension MatchTypeExtension on MatchType {
         return '正規化一致';
       case MatchType.pattern:
         return 'パターン一致';
+      case MatchType.categoryPattern:
+        return 'カテゴリパターン一致';
       case MatchType.variation:
         return '変種一致';
     }
@@ -640,12 +742,22 @@ class ContentCheckResult {
   /// ユーザー向けメッセージ
   String get userMessage {
     if (isClean) return '';
-    return '不適切な表現が含まれています。内容を修正してください。';
+
+    // 最も重大なカテゴリのメッセージを返す
+    final maxCategory = violations
+        .reduce((a, b) => a.category.severity > b.category.severity ? a : b)
+        .category;
+    return maxCategory.blockMessage;
   }
 
   /// 違反カテゴリ一覧
   List<NgWordCategory> get violatedCategories {
     return violations.map((v) => v.category).toSet().toList();
+  }
+
+  /// 検出されたNGワード一覧
+  List<String> get detectedWords {
+    return violations.map((v) => v.word).toSet().toList();
   }
 
   @override
@@ -664,6 +776,7 @@ class FilterStats {
   final int customNgWords;
   final int customAllowWords;
   final FilterStrictness strictness;
+  final Map<String, int> categoryStats;
 
   const FilterStats({
     required this.totalNgWords,
@@ -671,6 +784,7 @@ class FilterStats {
     required this.customNgWords,
     required this.customAllowWords,
     required this.strictness,
+    this.categoryStats = const {},
   });
 
   @override

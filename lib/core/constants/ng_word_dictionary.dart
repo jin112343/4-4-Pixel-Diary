@@ -591,7 +591,7 @@ class NgWordDictionary {
     'bastard', 'b@stard', 'b4stard',
     'bastards', 'bastad',
     'asshole', 'a-hole', '@sshole', 'arsehole',
-    'assholes', 'a$$hole',
+    'assholes', r'a$$hole',
     'douchebag', 'douche', 'douchenozzle',
     'prick', 'pr1ck',
     'scum', 'scumbag', 'scummy',
@@ -1018,7 +1018,7 @@ class NgWordDictionary {
     '％': '%', '＾': '^', '＆': '&', '＊': '*', '（': '(',
     '）': ')', '－': '-', '＝': '=', '＋': '+', '［': '[',
     '］': ']', '｛': '{', '｝': '}', '｜': '|', '＼': r'\',
-    '：': ':', '；': ';', '"': '"', ''': "'", '＜': '<',
+    '：': ':', '；': ';', '"': '"', "'": "'", '＜': '<',
     '＞': '>', '，': ',', '．': '.', '／': '/', '～': '~',
   };
 
