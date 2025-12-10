@@ -173,13 +173,15 @@ class HomeViewModel extends StateNotifier<HomeState> {
       return;
     }
 
-    // ステップ1: ローカルフィルタ（超厳格チェック）
-    final filterResult = TitleFilter.filter(state.title);
-    if (!filterResult.isValid) {
+    // ステップ1: ローカルフィルタ（事前チェック）
+    final localCheck = ContentFilter.check(state.title);
+    if (!localCheck.isClean && localCheck.maxSeverity >= 4) {
       state = state.copyWith(
-        titleError: filterResult.error,
+        titleError: localCheck.message.isNotEmpty
+            ? localCheck.message
+            : '不適切な表現が含まれています',
       );
-      logger.w('Exchange blocked (Local): NGワード検出 - ${state.title}');
+      logger.w('Exchange blocked (Local): 事前チェック検出 - ${state.title}');
       return;
     }
 

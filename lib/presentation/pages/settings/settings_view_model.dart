@@ -72,11 +72,15 @@ class SettingsViewModel extends StateNotifier<SettingsState> {
       return;
     }
 
-    // ステップ1: ローカルフィルタ（超厳格チェック）
-    final filterResult = NicknameFilter.filter(nickname);
-    if (!filterResult.isValid) {
-      state = state.copyWith(errorMessage: filterResult.error);
-      logger.w('Nickname blocked (Local): NGワード検出 - $nickname');
+    // ステップ1: ローカルフィルタ（事前チェック）
+    final localCheck = ContentFilter.check(nickname);
+    if (!localCheck.isClean && localCheck.maxSeverity >= 4) {
+      state = state.copyWith(
+        errorMessage: localCheck.message.isNotEmpty
+            ? localCheck.message
+            : '不適切な表現が含まれています',
+      );
+      logger.w('Nickname blocked (Local): 事前チェック検出 - $nickname');
       return;
     }
 
