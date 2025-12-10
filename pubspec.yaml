@@ -25,6 +25,7 @@ dependencies:
 
   # ネットワーク
   dio: ^5.7.0
+  http: ^1.2.0
 
   # ローカルストレージ
   hive_flutter: ^1.1.0
