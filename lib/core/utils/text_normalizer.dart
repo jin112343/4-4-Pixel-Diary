@@ -2,33 +2,103 @@ import '../constants/ng_word_dictionary.dart';
 
 /// テキスト正規化ユーティリティ
 /// フィルタ回避を防ぐためのテキスト前処理
+/// 任天堂レベルの厳格な正規化を実現
 class TextNormalizer {
   TextNormalizer._();
+
+  // ============================================================
+  // ゼロ幅文字・不可視文字の定義
+  // ============================================================
+
+  /// ゼロ幅文字・不可視文字のコードポイント
+  static const List<int> invisibleCharCodes = [
+    0x0000, // Null
+    0x00AD, // Soft Hyphen
+    0x034F, // Combining Grapheme Joiner
+    0x061C, // Arabic Letter Mark
+    0x115F, // Hangul Choseong Filler
+    0x1160, // Hangul Jungseong Filler
+    0x17B4, // Khmer Vowel Inherent Aq
+    0x17B5, // Khmer Vowel Inherent Aa
+    0x180E, // Mongolian Vowel Separator
+    0x2000, // En Quad
+    0x2001, // Em Quad
+    0x2002, // En Space
+    0x2003, // Em Space
+    0x2004, // Three-Per-Em Space
+    0x2005, // Four-Per-Em Space
+    0x2006, // Six-Per-Em Space
+    0x2007, // Figure Space
+    0x2008, // Punctuation Space
+    0x2009, // Thin Space
+    0x200A, // Hair Space
+    0x200B, // Zero Width Space
+    0x200C, // Zero Width Non-Joiner
+    0x200D, // Zero Width Joiner
+    0x200E, // Left-To-Right Mark
+    0x200F, // Right-To-Left Mark
+    0x202A, // Left-To-Right Embedding
+    0x202B, // Right-To-Left Embedding
+    0x202C, // Pop Directional Formatting
+    0x202D, // Left-To-Right Override
+    0x202E, // Right-To-Left Override
+    0x2060, // Word Joiner
+    0x2061, // Function Application
+    0x2062, // Invisible Times
+    0x2063, // Invisible Separator
+    0x2064, // Invisible Plus
+    0x206A, // Inhibit Symmetric Swapping
+    0x206B, // Activate Symmetric Swapping
+    0x206C, // Inhibit Arabic Form Shaping
+    0x206D, // Activate Arabic Form Shaping
+    0x206E, // National Digit Shapes
+    0x206F, // Nominal Digit Shapes
+    0xFEFF, // Zero Width No-Break Space (BOM)
+    0xFFA0, // Halfwidth Hangul Filler
+    0xFFF9, // Interlinear Annotation Anchor
+    0xFFFA, // Interlinear Annotation Separator
+    0xFFFB, // Interlinear Annotation Terminator
+  ];
+
+  // ============================================================
+  // メイン正規化メソッド
+  // ============================================================
 
   /// テキストを正規化
   /// フィルタリング前にこのメソッドを使用して入力を正規化する
   static String normalize(String text) {
+    if (text.isEmpty) return text;
+
     var result = text;
 
-    // 1. 空白の正規化
+    // 1. ゼロ幅文字・不可視文字の除去
+    result = removeInvisibleChars(result);
+
+    // 2. Unicode正規化（NFKC）
+    result = unicodeNormalize(result);
+
+    // 3. 空白の正規化
     result = _normalizeWhitespace(result);
 
-    // 2. 全角 → 半角 変換
+    // 4. 全角 → 半角 変換
     result = _convertFullWidthToHalfWidth(result);
 
-    // 3. 大文字 → 小文字
+    // 5. 大文字 → 小文字
     result = result.toLowerCase();
 
-    // 4. カタカナ → ひらがな 変換
+    // 6. カタカナ → ひらがな 変換
     result = _convertKatakanaToHiragana(result);
 
-    // 5. 類似文字の正規化
+    // 7. 類似文字の正規化（Unicodeホモグリフ対策）
     result = _normalizeSimilarChars(result);
 
-    // 6. 繰り返し文字の圧縮
+    // 8. 日本語特殊置換（漢字当て字対策）
+    result = _normalizeJapaneseSubstitutions(result);
+
+    // 9. 繰り返し文字の圧縮
     result = _compressRepeatingChars(result);
 
-    // 7. 特殊文字の除去
+    // 10. 特殊文字の除去
     result = _removeSpecialChars(result);
 
     return result;
@@ -36,11 +106,254 @@ class TextNormalizer {
 
   /// 軽量正規化（パフォーマンス重視の場合）
   static String normalizeLight(String text) {
-    var result = text.toLowerCase();
+    if (text.isEmpty) return text;
+
+    var result = text;
+    result = removeInvisibleChars(result);
+    result = result.toLowerCase();
     result = _convertFullWidthToHalfWidth(result);
     result = _normalizeWhitespace(result);
     return result;
   }
+
+  /// 超厳格正規化（任天堂レベル）
+  static String normalizeStrict(String text) {
+    if (text.isEmpty) return text;
+
+    var result = normalize(text);
+
+    // 追加: 数字→文字変換
+    result = convertNumbersToChars(result);
+
+    // 追加: 日本語数字置換（4ね→しね）
+    result = convertJapaneseNumberSubstitutions(result);
+
+    // 追加: すべての空白・記号を除去
+    result = result.replaceAll(RegExp(r'[\s\p{P}\p{S}]', unicode: true), '');
+
+    return result;
+  }
+
+  // ============================================================
+  // ゼロ幅文字・不可視文字の処理
+  // ============================================================
+
+  /// ゼロ幅文字・不可視文字を除去
+  static String removeInvisibleChars(String text) {
+    if (text.isEmpty) return text;
+
+    final buffer = StringBuffer();
+    for (final rune in text.runes) {
+      // 不可視文字リストに含まれていなければ追加
+      if (!invisibleCharCodes.contains(rune)) {
+        // 制御文字（U+0000-U+001F, U+007F-U+009F）も除去
+        if (!_isControlChar(rune)) {
+          buffer.writeCharCode(rune);
+        }
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// 制御文字かどうか判定
+  static bool _isControlChar(int codePoint) {
+    return (codePoint >= 0x0000 && codePoint <= 0x001F) ||
+        (codePoint >= 0x007F && codePoint <= 0x009F);
+  }
+
+  // ============================================================
+  // Unicode正規化
+  // ============================================================
+
+  /// Unicode正規化（NFKC互換分解・正規合成）
+  /// Dartでは組み込みNFKCがないため、主要なケースを手動で処理
+  static String unicodeNormalize(String text) {
+    if (text.isEmpty) return text;
+
+    var result = text;
+
+    // 合字の分解
+    result = _decomposeUnicodeLigatures(result);
+
+    // 上付き・下付き文字の正規化
+    result = _normalizeSubSuperscripts(result);
+
+    // 囲み文字の正規化
+    result = _normalizeEnclosedChars(result);
+
+    // 特殊スタイル文字の正規化（数学記号、装飾文字など）
+    result = _normalizeStyledChars(result);
+
+    return result;
+  }
+
+  /// 合字の分解
+  static String _decomposeUnicodeLigatures(String text) {
+    const ligatureMap = {
+      'ﬁ': 'fi',
+      'ﬂ': 'fl',
+      'ﬀ': 'ff',
+      'ﬃ': 'ffi',
+      'ﬄ': 'ffl',
+      'ﬅ': 'st',
+      'ﬆ': 'st',
+      'Ꜳ': 'AA',
+      'ꜳ': 'aa',
+      'Æ': 'AE',
+      'æ': 'ae',
+      'Œ': 'OE',
+      'œ': 'oe',
+      'ĳ': 'ij',
+      'Ĳ': 'IJ',
+      'ǉ': 'lj',
+      'ǌ': 'nj',
+      'ǆ': 'dz',
+    };
+
+    var result = text;
+    ligatureMap.forEach((ligature, decomposed) {
+      result = result.replaceAll(ligature, decomposed);
+    });
+    return result;
+  }
+
+  /// 上付き・下付き文字の正規化
+  static String _normalizeSubSuperscripts(String text) {
+    const superscriptMap = {
+      '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+      '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+      'ᵃ': 'a', 'ᵇ': 'b', 'ᶜ': 'c', 'ᵈ': 'd', 'ᵉ': 'e',
+      'ᶠ': 'f', 'ᵍ': 'g', 'ʰ': 'h', 'ⁱ': 'i', 'ʲ': 'j',
+      'ᵏ': 'k', 'ˡ': 'l', 'ᵐ': 'm', 'ⁿ': 'n', 'ᵒ': 'o',
+      'ᵖ': 'p', 'ʳ': 'r', 'ˢ': 's', 'ᵗ': 't', 'ᵘ': 'u',
+      'ᵛ': 'v', 'ʷ': 'w', 'ˣ': 'x', 'ʸ': 'y', 'ᶻ': 'z',
+    };
+
+    const subscriptMap = {
+      '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+      '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+      'ₐ': 'a', 'ₑ': 'e', 'ₕ': 'h', 'ᵢ': 'i', 'ⱼ': 'j',
+      'ₖ': 'k', 'ₗ': 'l', 'ₘ': 'm', 'ₙ': 'n', 'ₒ': 'o',
+      'ₚ': 'p', 'ᵣ': 'r', 'ₛ': 's', 'ₜ': 't', 'ᵤ': 'u',
+      'ᵥ': 'v', 'ₓ': 'x',
+    };
+
+    var result = text;
+    superscriptMap.forEach((sup, normal) {
+      result = result.replaceAll(sup, normal);
+    });
+    subscriptMap.forEach((sub, normal) {
+      result = result.replaceAll(sub, normal);
+    });
+    return result;
+  }
+
+  /// 囲み文字の正規化
+  static String _normalizeEnclosedChars(String text) {
+    final buffer = StringBuffer();
+    for (final rune in text.runes) {
+      final normalized = _normalizeEnclosedChar(rune);
+      if (normalized != null) {
+        buffer.write(normalized);
+      } else {
+        buffer.writeCharCode(rune);
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// 単一囲み文字の正規化
+  static String? _normalizeEnclosedChar(int codePoint) {
+    // 囲み英数字（①②③...等）
+    if (codePoint >= 0x2460 && codePoint <= 0x2473) {
+      return (codePoint - 0x2460 + 1).toString();
+    }
+    // 囲みCJK文字
+    if (codePoint >= 0x3200 && codePoint <= 0x321E) {
+      return String.fromCharCode(codePoint - 0x3200 + 0x1100);
+    }
+    // 丸付き数字（黒丸）
+    if (codePoint >= 0x2776 && codePoint <= 0x277F) {
+      return (codePoint - 0x2776 + 1).toString();
+    }
+    // 丸付きアルファベット（大文字）
+    if (codePoint >= 0x24B6 && codePoint <= 0x24CF) {
+      return String.fromCharCode(codePoint - 0x24B6 + 0x41);
+    }
+    // 丸付きアルファベット（小文字）
+    if (codePoint >= 0x24D0 && codePoint <= 0x24E9) {
+      return String.fromCharCode(codePoint - 0x24D0 + 0x61);
+    }
+    return null;
+  }
+
+  /// 特殊スタイル文字の正規化（数学記号、装飾文字など）
+  static String _normalizeStyledChars(String text) {
+    final buffer = StringBuffer();
+    for (final rune in text.runes) {
+      final normalized = _normalizeStyledChar(rune);
+      buffer.write(normalized);
+    }
+    return buffer.toString();
+  }
+
+  /// 単一スタイル文字の正規化
+  static String _normalizeStyledChar(int codePoint) {
+    // 数学用太字アルファベット（A-Z）
+    if (codePoint >= 0x1D400 && codePoint <= 0x1D419) {
+      return String.fromCharCode(codePoint - 0x1D400 + 0x41);
+    }
+    // 数学用太字アルファベット（a-z）
+    if (codePoint >= 0x1D41A && codePoint <= 0x1D433) {
+      return String.fromCharCode(codePoint - 0x1D41A + 0x61);
+    }
+    // 数学用イタリックアルファベット
+    if (codePoint >= 0x1D434 && codePoint <= 0x1D44D) {
+      return String.fromCharCode(codePoint - 0x1D434 + 0x41);
+    }
+    if (codePoint >= 0x1D44E && codePoint <= 0x1D467) {
+      return String.fromCharCode(codePoint - 0x1D44E + 0x61);
+    }
+    // 二重線文字（𝔸𝔹ℂ等）
+    if (codePoint >= 0x1D538 && codePoint <= 0x1D551) {
+      return String.fromCharCode(codePoint - 0x1D538 + 0x41);
+    }
+    // フラクトゥール文字
+    if (codePoint >= 0x1D504 && codePoint <= 0x1D51C) {
+      return String.fromCharCode(codePoint - 0x1D504 + 0x41);
+    }
+    // 筆記体文字
+    if (codePoint >= 0x1D49C && codePoint <= 0x1D4B5) {
+      return String.fromCharCode(codePoint - 0x1D49C + 0x41);
+    }
+    // サンセリフ太字
+    if (codePoint >= 0x1D5A0 && codePoint <= 0x1D5B9) {
+      return String.fromCharCode(codePoint - 0x1D5A0 + 0x41);
+    }
+    if (codePoint >= 0x1D5BA && codePoint <= 0x1D5D3) {
+      return String.fromCharCode(codePoint - 0x1D5BA + 0x61);
+    }
+    // モノスペース
+    if (codePoint >= 0x1D670 && codePoint <= 0x1D689) {
+      return String.fromCharCode(codePoint - 0x1D670 + 0x41);
+    }
+    if (codePoint >= 0x1D68A && codePoint <= 0x1D6A3) {
+      return String.fromCharCode(codePoint - 0x1D68A + 0x61);
+    }
+    // 数学用数字
+    if (codePoint >= 0x1D7CE && codePoint <= 0x1D7D7) {
+      return String.fromCharCode(codePoint - 0x1D7CE + 0x30);
+    }
+    if (codePoint >= 0x1D7D8 && codePoint <= 0x1D7E1) {
+      return String.fromCharCode(codePoint - 0x1D7D8 + 0x30);
+    }
+
+    return String.fromCharCode(codePoint);
+  }
+
+  // ============================================================
+  // 基本的な正規化
+  // ============================================================
 
   /// 空白の正規化
   static String _normalizeWhitespace(String text) {
@@ -72,10 +385,39 @@ class TextNormalizer {
     return buffer.toString();
   }
 
-  /// 類似文字の正規化
+  /// 類似文字の正規化（Unicodeホモグリフ対策）
   static String _normalizeSimilarChars(String text) {
     var result = text;
     NgWordDictionary.similarCharMap.forEach((from, to) {
+      result = result.replaceAll(from, to);
+    });
+    return result;
+  }
+
+  /// 日本語特殊置換（漢字当て字対策）
+  static String _normalizeJapaneseSubstitutions(String text) {
+    const substitutions = {
+      // 漢字→カタカナ/ひらがな当て字
+      '工口': 'えろ', // エロ
+      '口ロ': 'ろろ',
+      '夕卜': 'たと',
+      '八ン': 'はん',
+      '力ス': 'かす',
+      '人ス': 'にす',
+      '口口': 'ろろ',
+      // 氏ね→死ね
+      '氏ね': 'しね',
+      '市ね': 'しね',
+      '詩ね': 'しね',
+      // タヒ→死
+      'タヒ': 'し',
+      'ﾀﾋ': 'し',
+      // その他
+      '逝': 'し', // 逝ってよし→しってよし
+    };
+
+    var result = text;
+    substitutions.forEach((from, to) {
       result = result.replaceAll(from, to);
     });
     return result;
@@ -92,67 +434,26 @@ class TextNormalizer {
 
   /// 特殊文字の除去（文字間に挿入された記号等）
   static String _removeSpecialChars(String text) {
-    // 文字間の装飾記号を除去
-    // ただし意味のある記号は残す
+    // 文字間の装飾記号を除去（ただし意味のある記号は残す）
     return text.replaceAll(
       RegExp(r'[*_~`|\\^]'),
       '',
     );
   }
 
-  /// 伏せ字パターンの展開
-  /// 「死○」→「死ね」「死んで」等に展開
-  static List<String> expandMaskedPatterns(String text) {
-    final results = <String>[text];
-
-    // 「○」「●」「〇」を可能性のある文字に置換
-    final maskedChars = ['○', '●', '〇', '◯', '*', '＊'];
-    final replacements = {
-      '死': ['ね', 'んで', 'のう'],
-      '殺': ['す', 'せ', 'した'],
-      'f': ['uck'],
-      's': ['hit', 'ex'],
-      'd': ['ie', 'ick'],
-    };
-
-    for (final masked in maskedChars) {
-      if (text.contains(masked)) {
-        // 伏せ字の前の文字を取得
-        final pattern = RegExp('(.)$masked');
-        final match = pattern.firstMatch(text);
-        if (match != null) {
-          final prefix = match.group(1)!;
-          final possibleSuffixes = replacements[prefix] ?? [];
-          for (final suffix in possibleSuffixes) {
-            results.add(text.replaceFirst('$prefix$masked', '$prefix$suffix'));
-          }
-        }
-      }
-    }
-
-    return results;
-  }
-
-  /// 文字間スペースを除去した文字列を生成
-  /// 「f u c k」→「fuck」
-  static String removeInterspersedSpaces(String text) {
-    // 単一文字がスペースで区切られているパターンを検出
-    final pattern = RegExp(r'^([a-z])\s+([a-z])(\s+[a-z])*$');
-    if (pattern.hasMatch(text)) {
-      return text.replaceAll(' ', '');
-    }
-    return text;
-  }
+  // ============================================================
+  // 数字・記号の変換
+  // ============================================================
 
   /// 数字を文字に変換したバリエーションを生成
-  /// 「4ね」→「しね」、「h3ll0」→「hello」
+  /// 「h3ll0」→「hello」、「4ck」→「ack」
   static String convertNumbersToChars(String text) {
-    final numberMap = {
+    const numberMap = {
       '0': 'o',
       '1': 'i',
       '2': 'z',
       '3': 'e',
-      '4': 'し', // 日本語特有
+      '4': 'a',
       '5': 's',
       '6': 'g',
       '7': 't',
@@ -167,6 +468,125 @@ class TextNormalizer {
     return result;
   }
 
+  /// 日本語の数字置換を変換
+  /// 「4ね」→「しね」、「56す」→「ころす」
+  static String convertJapaneseNumberSubstitutions(String text) {
+    var result = text;
+
+    // 4→し（「4ね」対策）
+    result = result.replaceAllMapped(
+      RegExp(r'4([ねネ])'),
+      (match) => 'し${match.group(1)}',
+    );
+
+    // 56→ころ（「56す」対策）
+    result = result.replaceAllMapped(
+      RegExp(r'56([すせ])'),
+      (match) => 'ころ${match.group(1)}',
+    );
+
+    return result;
+  }
+
+  // ============================================================
+  // 伏せ字・変種表現の処理
+  // ============================================================
+
+  /// 伏せ字パターンの展開
+  /// 「死○」→「死ね」「死んで」等に展開
+  static List<String> expandMaskedPatterns(String text) {
+    final results = <String>{text};
+
+    // 伏せ字マーカー
+    final maskedChars = ['○', '●', '〇', '◯', '*', '＊', '×', '☆', '★'];
+
+    // 伏せ字の後に来る可能性のある文字
+    final replacements = {
+      '死': ['ね', 'んで', 'のう', 'ぬ', 'にたい'],
+      '殺': ['す', 'せ', 'した', 'される', 'してやる'],
+      'し': ['ね', 'んで'],
+      'ころ': ['す', 'せ', 'した'],
+      'f': ['uck', 'ag', 'ucker'],
+      's': ['hit', 'ex', 'lut'],
+      'd': ['ie', 'ick', 'ead'],
+      'c': ['ock', 'unt', 'rap'],
+      'b': ['itch', 'astard'],
+      'p': ['ussy', 'enis', 'orn'],
+      'a': ['ss', 'nal', 'sshole'],
+      'n': ['igger', 'igga'],
+    };
+
+    for (final masked in maskedChars) {
+      if (text.contains(masked)) {
+        // 伏せ字の前の文字を取得してパターンマッチ
+        final pattern = RegExp('(.)$masked');
+        for (final match in pattern.allMatches(text)) {
+          final prefix = match.group(1)!.toLowerCase();
+          final possibleSuffixes = replacements[prefix] ?? [];
+          for (final suffix in possibleSuffixes) {
+            results.add(text.replaceFirst(
+              '${match.group(1)}$masked',
+              '${match.group(1)}$suffix',
+            ));
+          }
+        }
+
+        // 伏せ字の後の文字を取得してパターンマッチ
+        final patternAfter = RegExp('$masked(.)');
+        for (final match in patternAfter.allMatches(text)) {
+          final suffix = match.group(1)!.toLowerCase();
+          // 「○ね」→「死ね」など
+          if (suffix == 'ね') {
+            results.add(text.replaceFirst('$masked$suffix', '死$suffix'));
+            results.add(text.replaceFirst('$masked$suffix', 'し$suffix'));
+          }
+          if (suffix == 'す') {
+            results.add(text.replaceFirst('$masked$suffix', '殺$suffix'));
+            results.add(text.replaceFirst('$masked$suffix', 'ころ$suffix'));
+          }
+        }
+      }
+    }
+
+    return results.toList();
+  }
+
+  /// 文字間スペースを除去した文字列を生成
+  /// 「f u c k」→「fuck」
+  static String removeInterspersedSpaces(String text) {
+    // 単一文字がスペースで区切られているパターンを検出して結合
+    // 例: "f u c k" → "fuck", "し ね" → "しね"
+    final singleCharSpaced = RegExp(r'^(\S)\s+(\S)(\s+\S)*$');
+    if (singleCharSpaced.hasMatch(text)) {
+      return text.replaceAll(RegExp(r'\s+'), '');
+    }
+
+    // パターンマッチしなくても、短い単語がスペースで区切られていたら結合
+    // 例: "f u c k you" → "fuck you"
+    var result = text;
+    result = result.replaceAllMapped(
+      RegExp(r'(\b\S)\s+(\S)\s+(\S)\s+(\S)\b'),
+      (match) =>
+          '${match.group(1)}${match.group(2)}${match.group(3)}${match.group(4)}',
+    );
+    result = result.replaceAllMapped(
+      RegExp(r'(\b\S)\s+(\S)\s+(\S)\b'),
+      (match) => '${match.group(1)}${match.group(2)}${match.group(3)}',
+    );
+
+    return result;
+  }
+
+  /// 記号挿入による回避を正規化
+  /// 「f.u.c.k」「f_u_c_k」→「fuck」
+  static String removeInterspersedPunctuation(String text) {
+    // 文字間に挿入された記号を除去
+    return text.replaceAllMapped(
+      RegExp(r'(\w)[.\-_\/\\*#@!+]+(\w)'),
+      (match) => '${match.group(1)}${match.group(2)}',
+    );
+  }
+
   /// 複数の正規化バリエーションを生成
   /// より厳格なチェックが必要な場合に使用
   static List<String> generateVariations(String text) {
@@ -174,6 +594,12 @@ class TextNormalizer {
 
     // 基本の正規化
     variations.add(normalize(text));
+
+    // 軽量正規化
+    variations.add(normalizeLight(text));
+
+    // 超厳格正規化
+    variations.add(normalizeStrict(text));
 
     // 数字→文字変換版
     variations.add(convertNumbersToChars(text));
@@ -183,16 +609,33 @@ class TextNormalizer {
     variations.add(removeInterspersedSpaces(text));
     variations.add(normalize(removeInterspersedSpaces(text)));
 
+    // 記号除去版
+    variations.add(removeInterspersedPunctuation(text));
+    variations.add(normalize(removeInterspersedPunctuation(text)));
+
     // 伏せ字展開版
-    variations.addAll(expandMaskedPatterns(text));
+    for (final expanded in expandMaskedPatterns(text)) {
+      variations.add(expanded);
+      variations.add(normalize(expanded));
+    }
+
+    // 空白・記号完全除去版
+    final noWhitespace = text.replaceAll(RegExp(r'\s+'), '');
+    variations.add(noWhitespace);
+    variations.add(normalize(noWhitespace));
+
+    // 記号完全除去版
+    final noPunctuation =
+        text.replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+    variations.add(noPunctuation);
+    variations.add(normalize(noPunctuation));
 
     return variations.toList();
   }
-}
 
-/// 文字種別判定ユーティリティ
-class CharacterTypeUtil {
-  CharacterTypeUtil._();
+  // ============================================================
+  // 文字種別判定ユーティリティ
+  // ============================================================
 
   /// ひらがなかどうか
   static bool isHiragana(String char) {
@@ -270,4 +713,20 @@ enum TextLanguage {
   english,
   mixed,
   unknown,
+}
+
+/// 文字種別判定ユーティリティ（後方互換用エイリアス）
+class CharacterTypeUtil {
+  CharacterTypeUtil._();
+
+  static bool isHiragana(String char) => TextNormalizer.isHiragana(char);
+  static bool isKatakana(String char) => TextNormalizer.isKatakana(char);
+  static bool isKanji(String char) => TextNormalizer.isKanji(char);
+  static bool isJapanese(String char) => TextNormalizer.isJapanese(char);
+  static bool isAsciiAlphanumeric(String char) =>
+      TextNormalizer.isAsciiAlphanumeric(char);
+  static bool containsJapanese(String text) =>
+      TextNormalizer.containsJapanese(text);
+  static TextLanguage detectPrimaryLanguage(String text) =>
+      TextNormalizer.detectPrimaryLanguage(text);
 }
