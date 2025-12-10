@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Run build_runner
+        run: dart run build_runner build --delete-conflicting-outputs
+
       - name: Build Web (Release)
         run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
 
