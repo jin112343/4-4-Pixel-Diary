@@ -91,15 +91,13 @@ class LocalStorage {
   PixelArt? getPixelArt(String id) {
     final data = _pixelArtBox?.get(id);
     if (data == null) return null;
-    return PixelArt.fromJson(Map<String, dynamic>.from(data));
+    return PixelArt.fromJson(_convertMap(data));
   }
 
   /// すべてのドット絵を取得
   List<PixelArt> getAllPixelArts() {
     final values = _pixelArtBox?.values ?? [];
-    return values
-        .map((data) => PixelArt.fromJson(Map<String, dynamic>.from(data)))
-        .toList();
+    return values.map((data) => PixelArt.fromJson(_convertMap(data))).toList();
   }
 
   /// ドット絵を削除
@@ -117,9 +115,7 @@ class LocalStorage {
   /// アルバムのドット絵を取得
   List<PixelArt> getAlbumPixelArts() {
     final values = _albumBox?.values ?? [];
-    return values
-        .map((data) => PixelArt.fromJson(Map<String, dynamic>.from(data)))
-        .toList()
+    return values.map((data) => PixelArt.fromJson(_convertMap(data))).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
@@ -152,7 +148,34 @@ class LocalStorage {
   AnonymousUser? getUser() {
     final data = _userBox?.get('current');
     if (data == null) return null;
-    return AnonymousUser.fromJson(Map<String, dynamic>.from(data));
+    // Hiveから取得したMapは Map<dynamic, dynamic> なので再帰的に変換
+    return AnonymousUser.fromJson(_convertMap(data));
+  }
+
+  /// Map<dynamic, dynamic> を再帰的に Map<String, dynamic> に変換
+  Map<String, dynamic> _convertMap(Map<dynamic, dynamic> map) {
+    return map.map((key, value) {
+      if (value is Map) {
+        return MapEntry(key.toString(), _convertMap(value));
+      } else if (value is List) {
+        return MapEntry(key.toString(), _convertList(value));
+      } else {
+        return MapEntry(key.toString(), value);
+      }
+    });
+  }
+
+  /// List内のMapも再帰的に変換
+  List<dynamic> _convertList(List<dynamic> list) {
+    return list.map((item) {
+      if (item is Map) {
+        return _convertMap(item);
+      } else if (item is List) {
+        return _convertList(item);
+      } else {
+        return item;
+      }
+    }).toList();
   }
 
   /// ユーザーを削除
