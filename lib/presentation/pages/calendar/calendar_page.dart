@@ -26,17 +26,46 @@ class CalendarPage extends ConsumerWidget {
 }
 
 /// カレンダーコンテンツ
-class _CalendarContent extends ConsumerWidget {
+class _CalendarContent extends ConsumerStatefulWidget {
   const _CalendarContent({required this.userId});
 
   final String userId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(calendarViewModelProvider(userId));
+  ConsumerState<_CalendarContent> createState() => _CalendarContentState();
+}
+
+class _CalendarContentState extends ConsumerState<_CalendarContent>
+    with RouteAware {
+  /// カレンダーの展開状態
+  bool _isCalendarExpanded = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // 初回表示時にリフレッシュ
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(calendarViewModelProvider(widget.userId).notifier).refresh();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 画面に戻ってきた時にリフレッシュ
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(calendarViewModelProvider(widget.userId).notifier).refresh();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(calendarViewModelProvider(widget.userId));
 
     // エラー監視
-    ref.listen<CalendarState>(calendarViewModelProvider(userId), (
+    ref.listen<CalendarState>(calendarViewModelProvider(widget.userId), (
       previous,
       next,
     ) {
@@ -48,36 +77,35 @@ class _CalendarContent extends ConsumerWidget {
             backgroundColor: Colors.red,
           ),
         );
-        ref.read(calendarViewModelProvider(userId).notifier).clearError();
+        ref
+            .read(calendarViewModelProvider(widget.userId).notifier)
+            .clearError();
       }
     });
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('カレンダー'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.today),
-            tooltip: '今日',
-            onPressed: () {
-              final today = DateTime.now();
-              ref.read(calendarViewModelProvider(userId).notifier)
-                ..changeFocusedMonth(today)
-                ..selectDate(today);
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
-          // カレンダー部分
-          _CalendarSection(userId: userId, state: state),
+          // カレンダー部分（折りたたみ可能）
+          _CollapsibleCalendarSection(
+            userId: widget.userId,
+            state: state,
+            isExpanded: _isCalendarExpanded,
+            onToggle: () {
+              setState(() {
+                _isCalendarExpanded = !_isCalendarExpanded;
+              });
+            },
+          ),
 
           const Divider(height: 1),
 
           // 選択日のドット絵リスト
           Expanded(
-            child: _SelectedDatePixelArts(userId: userId, state: state),
+            child: _SelectedDatePixelArts(userId: widget.userId, state: state),
           ),
         ],
       ),
@@ -85,27 +113,84 @@ class _CalendarContent extends ConsumerWidget {
   }
 }
 
-/// カレンダーセクション
-class _CalendarSection extends ConsumerWidget {
-  const _CalendarSection({required this.userId, required this.state});
+/// 折りたたみ可能なカレンダーセクション
+class _CollapsibleCalendarSection extends ConsumerWidget {
+  const _CollapsibleCalendarSection({
+    required this.userId,
+    required this.state,
+    required this.isExpanded,
+    required this.onToggle,
+  });
 
   final String userId;
   final CalendarState state;
+  final bool isExpanded;
+  final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: CalendarDatePicker(
-        initialDate: state.selectedDate,
-        firstDate: DateTime(2020),
-        lastDate: DateTime.now().add(const Duration(days: 365)),
-        currentDate: DateTime.now(),
-        onDateChanged: (date) {
-          ref.read(calendarViewModelProvider(userId).notifier).selectDate(date);
-        },
-        selectableDayPredicate: (date) => true,
-      ),
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat('yyyy年M月', 'ja_JP');
+
+    return Column(
+      children: [
+        // ヘッダー（タップで展開/折りたたみ）
+        InkWell(
+          onTap: onToggle,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_month,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  dateFormat.format(state.focusedMonth),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                AnimatedRotation(
+                  turns: isExpanded ? 0 : -0.25,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.expand_more,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // カレンダー本体（アニメーション付き展開/折りたたみ）
+        AnimatedCrossFade(
+          firstChild: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: CalendarDatePicker(
+              initialDate: state.selectedDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+              currentDate: DateTime.now(),
+              onDateChanged: (date) {
+                ref
+                    .read(calendarViewModelProvider(userId).notifier)
+                    .selectDate(date);
+              },
+              selectableDayPredicate: (date) => true,
+            ),
+          ),
+          secondChild: const SizedBox.shrink(),
+          crossFadeState: isExpanded
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
     );
   }
 }
@@ -125,57 +210,158 @@ class _SelectedDatePixelArts extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 日付ヘッダー
+        // 日付ヘッダー（左右矢印付き）
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              Icon(Icons.event, size: 20, color: theme.colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                dateFormat.format(state.selectedDate),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+              // 前日ボタン
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => _goToPreviousDay(ref),
+                tooltip: '前日',
+              ),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.event,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      dateFormat.format(state.selectedDate),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (state.selectedDatePixelArts.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${state.selectedDatePixelArts.length}件',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const Spacer(),
-              if (state.selectedDatePixelArts.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${state.selectedDatePixelArts.length}件',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
+              // 翌日ボタン
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: _canGoToNextDay()
+                    ? () => _goToNextDay(ref)
+                    : null,
+                tooltip: '翌日',
+              ),
             ],
           ),
         ),
 
-        // コンテンツ
+        // もらった絵の表示/非表示トグル
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.card_giftcard,
+                size: 16,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'もらった絵も表示',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const Spacer(),
+              Switch(
+                value: state.showReceivedArts,
+                onChanged: (value) {
+                  ref
+                      .read(calendarViewModelProvider(userId).notifier)
+                      .toggleShowReceivedArts();
+                },
+              ),
+            ],
+          ),
+        ),
+
+        const Divider(height: 1),
+
+        // コンテンツ（スワイプ対応）
         Expanded(
-          child: state.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : state.selectedDatePixelArts.isEmpty
-              ? _EmptyState()
-              : _PixelArtList(pixelArts: state.selectedDatePixelArts),
+          child: GestureDetector(
+            onHorizontalDragEnd: (details) {
+              if (details.primaryVelocity == null) return;
+
+              // 右スワイプ → 前日
+              if (details.primaryVelocity! > 300) {
+                _goToPreviousDay(ref);
+              }
+              // 左スワイプ → 翌日
+              else if (details.primaryVelocity! < -300 && _canGoToNextDay()) {
+                _goToNextDay(ref);
+              }
+            },
+            child: state.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : state.selectedDatePixelArts.isEmpty
+                    ? _EmptyState(showReceivedArts: state.showReceivedArts)
+                    : _PixelArtList(pixelArts: state.selectedDatePixelArts),
+          ),
         ),
       ],
     );
+  }
+
+  /// 前日に移動
+  void _goToPreviousDay(WidgetRef ref) {
+    final previousDay = state.selectedDate.subtract(const Duration(days: 1));
+    ref.read(calendarViewModelProvider(userId).notifier).selectDate(previousDay);
+  }
+
+  /// 翌日に移動
+  void _goToNextDay(WidgetRef ref) {
+    final nextDay = state.selectedDate.add(const Duration(days: 1));
+    ref.read(calendarViewModelProvider(userId).notifier).selectDate(nextDay);
+  }
+
+  /// 翌日に移動可能か（未来の日付は不可）
+  bool _canGoToNextDay() {
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final selectedOnly = DateTime(
+      state.selectedDate.year,
+      state.selectedDate.month,
+      state.selectedDate.day,
+    );
+    return selectedOnly.isBefore(todayOnly);
   }
 }
 
 /// 空の状態
 class _EmptyState extends StatelessWidget {
+  const _EmptyState({this.showReceivedArts = false});
+
+  final bool showReceivedArts;
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -189,9 +375,19 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'この日のドット絵はありません',
+            showReceivedArts
+                ? 'この日のドット絵はありません'
+                : 'この日に描いたドット絵はありません',
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
+          if (!showReceivedArts) ...[
+            const SizedBox(height: 8),
+            Text(
+              '「もらった絵も表示」をONにすると\n受け取ったドット絵も確認できます',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ],
         ],
       ),
     );
@@ -326,8 +522,8 @@ class _SourceChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, icon, color) = switch (source) {
       PixelArtSource.local => ('自分', Icons.person, Colors.blue),
-      PixelArtSource.server => ('こうかん', Icons.swap_horiz, Colors.green),
-      PixelArtSource.bluetooth => ('すれちがい', Icons.bluetooth, Colors.purple),
+      PixelArtSource.server ||
+      PixelArtSource.bluetooth => ('こうかん', Icons.swap_horiz, Colors.green),
     };
 
     return Container(

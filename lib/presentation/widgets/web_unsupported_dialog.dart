@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 
 /// Web非対応機能のダイアログ
 ///
-/// Bluetooth交換やローカル通知など、Webでは利用できない機能に
+/// ローカル通知など、Webでは利用できない機能に
 /// アクセスしようとした際に表示するダイアログ。
 class WebUnsupportedDialog extends StatelessWidget {
   const WebUnsupportedDialog({

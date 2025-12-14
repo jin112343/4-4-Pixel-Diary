@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../presentation/pages/home/home_page.dart';
 import '../../presentation/pages/album/album_page.dart';
+import '../../presentation/pages/album/sent_album_page.dart';
 import '../../presentation/pages/timeline/timeline_page.dart';
 import '../../presentation/pages/calendar/calendar_page.dart';
 import '../../presentation/pages/settings/settings_page.dart';
@@ -14,6 +15,7 @@ class AppRoutes {
   static const String home = '/';
   static const String album = '/album';
   static const String albumDetail = '/album/:id';
+  static const String sentAlbum = '/sent-album';
   static const String timeline = '/timeline';
   static const String postDetail = '/post/:id';
   static const String calendar = '/calendar';
@@ -72,6 +74,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.settings,
       builder: (context, state) => const SettingsPage(),
+    ),
+    // おくったアルバム
+    GoRoute(
+      path: AppRoutes.sentAlbum,
+      builder: (context, state) => const SentAlbumPage(),
     ),
   ],
 );

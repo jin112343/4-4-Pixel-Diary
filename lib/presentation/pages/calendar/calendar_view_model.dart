@@ -18,8 +18,11 @@ class CalendarState with _$CalendarState {
     /// 表示中の月
     required DateTime focusedMonth,
 
-    /// 選択日のドット絵リスト
+    /// 選択日のドット絵リスト（フィルタリング済み）
     @Default([]) List<PixelArt> selectedDatePixelArts,
+
+    /// 選択日の全ドット絵リスト（フィルタリング前）
+    @Default([]) List<PixelArt> allSelectedDatePixelArts,
 
     /// 月内のドット絵がある日付マップ（日 -> 作品数）
     @Default({}) Map<int, int> pixelArtDaysInMonth,
@@ -29,6 +32,9 @@ class CalendarState with _$CalendarState {
 
     /// エラーメッセージ
     String? errorMessage,
+
+    /// もらった絵を表示するかどうか
+    @Default(false) bool showReceivedArts,
   }) = _CalendarState;
 }
 
@@ -119,17 +125,14 @@ class CalendarViewModel extends StateNotifier<CalendarState> {
           logger.e('Failed to load date data: ${failure.message}');
         },
         (pixelArts) {
-          // 自分で作成したドット絵のみをフィルタリング
-          final localArts = pixelArts
-              .where((art) => art.source == PixelArtSource.local)
-              .toList();
-
+          // 全ドット絵を保存し、フィルタリング済みリストを更新
           state = state.copyWith(
             isLoading: false,
-            selectedDatePixelArts: localArts,
+            allSelectedDatePixelArts: pixelArts,
+            selectedDatePixelArts: _filterPixelArts(pixelArts),
           );
           logger.i(
-            'Loaded ${localArts.length} local pixel arts for '
+            'Loaded ${pixelArts.length} pixel arts for '
             '${state.selectedDate.year}/${state.selectedDate.month}/'
             '${state.selectedDate.day}',
           );
@@ -141,6 +144,40 @@ class CalendarViewModel extends StateNotifier<CalendarState> {
         isLoading: false,
         errorMessage: 'データの読み込みに失敗しました',
       );
+    }
+  }
+
+  /// ドット絵をフィルタリング
+  List<PixelArt> _filterPixelArts(List<PixelArt> arts) {
+    if (state.showReceivedArts) {
+      // もらった絵も表示（全て表示）
+      return arts;
+    } else {
+      // 自分で作成したドット絵のみ
+      return arts.where((art) => art.source == PixelArtSource.local).toList();
+    }
+  }
+
+  /// もらった絵の表示/非表示を切り替え
+  void toggleShowReceivedArts() {
+    state = state.copyWith(
+      showReceivedArts: !state.showReceivedArts,
+      selectedDatePixelArts: _filterPixelArtsWithNewState(
+        state.allSelectedDatePixelArts,
+        !state.showReceivedArts,
+      ),
+    );
+  }
+
+  /// 新しい状態でドット絵をフィルタリング
+  List<PixelArt> _filterPixelArtsWithNewState(
+    List<PixelArt> arts,
+    bool showReceived,
+  ) {
+    if (showReceived) {
+      return arts;
+    } else {
+      return arts.where((art) => art.source == PixelArtSource.local).toList();
     }
   }
 

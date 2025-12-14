@@ -67,14 +67,10 @@ class _NotificationPermissionDialogState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'すれ違い通知を受け取るには、通知の許可が必要です。',
+            '通知を受け取るには、通知の許可が必要です。',
             style: TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 16),
-          _buildFeatureItem(
-            icon: Icons.bluetooth,
-            text: '近くのユーザーとすれ違った時',
-          ),
           _buildFeatureItem(
             icon: Icons.swap_horiz,
             text: 'ドット絵の交換が完了した時',
