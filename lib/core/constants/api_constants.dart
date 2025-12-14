@@ -36,7 +36,7 @@ class ApiConstants {
   static const String exchangeEndpoint = '/pixelart/exchange';
   static const String albumEndpoint = '/album';
   static const String postsEndpoint = '/posts';
-  static const String bluetoothUploadEndpoint = '/bluetooth/upload';
+  static const String commentsEndpoint = '/comments';
 
   /// ヘッダー
   static const String contentType = 'application/json';

@@ -145,12 +145,6 @@ class SettingsViewModel extends StateNotifier<SettingsState> {
     await updateSettings(currentSettings.copyWith(notificationsEnabled: enabled));
   }
 
-  /// Bluetooth設定を切り替え
-  Future<void> toggleBluetooth(bool enabled) async {
-    final currentSettings = state.user?.settings ?? const UserSettings();
-    await updateSettings(currentSettings.copyWith(bluetoothEnabled: enabled));
-  }
-
   /// テーマモードを更新
   Future<void> updateThemeMode(ThemeMode mode) async {
     final currentSettings = state.user?.settings ?? const UserSettings();

@@ -41,7 +41,7 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
       }
 
       // API呼び出し
-      final response = await _apiClient.post(
+      final response = await _apiClient.post<Map<String, dynamic>>(
         ApiConstants.exchangeEndpoint,
         data: {
           'pixels': pixels,

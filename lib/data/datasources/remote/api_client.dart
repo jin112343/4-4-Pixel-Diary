@@ -136,7 +136,7 @@ class LoadingInterceptor extends Interceptor {
   }
 
   @override
-  void onResponse(Response response, ResponseInterceptorHandler handler) {
+  void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
     _requestCount--;
     if (_requestCount == 0) {
       onRequestEnd?.call();
@@ -163,7 +163,7 @@ class LoggingInterceptor extends Interceptor {
   }
 
   @override
-  void onResponse(Response response, ResponseInterceptorHandler handler) {
+  void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
     logger.d('API Response: ${response.statusCode} ${response.requestOptions.path}');
     handler.next(response);
   }
@@ -199,7 +199,7 @@ class RetryInterceptor extends Interceptor {
       logger.w('Retrying request (${retryCount + 1}/$maxRetries): ${options.path}');
 
       try {
-        final response = await dio.fetch(options);
+        final response = await dio.fetch<dynamic>(options);
         handler.resolve(response);
         return;
       } catch (e) {

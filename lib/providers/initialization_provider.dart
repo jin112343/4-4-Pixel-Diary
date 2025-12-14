@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../core/utils/logger.dart';
+import '../domain/entities/anonymous_user.dart';
 import 'app_providers.dart';
 
 /// 初期化状態
@@ -24,40 +26,48 @@ class InitializationNotifier extends StateNotifier<InitializationStatus> {
     try {
       logger.i('Starting app initialization...');
 
-      // ローカルストレージを初期化
-      try {
-        final localStorage = _ref.read(localStorageProvider);
-        await localStorage.init();
-        logger.i('LocalStorage initialized');
-      } catch (e, stackTrace) {
-        logger.e('LocalStorage init failed', error: e, stackTrace: stackTrace);
-        rethrow;
+      final localStorage = _ref.read(localStorageProvider);
+      final secureStorage = _ref.read(secureStorageProvider);
+
+      // LocalStorageの初期化とSecureStorageからのdeviceID取得を並列実行
+      final results = await Future.wait([
+        localStorage.init(),
+        secureStorage.getDeviceId(),
+      ]);
+      logger.i('LocalStorage and SecureStorage initialized in parallel');
+
+      String? deviceId = results[1] as String?;
+
+      // deviceIdがなければ新規生成
+      if (deviceId == null) {
+        deviceId = const Uuid().v4();
+        await secureStorage.saveDeviceId(deviceId);
+        logger.i('New device ID generated: $deviceId');
       }
 
-      // 認証サービスを初期化してデバイスIDを取得
-      String? deviceId;
-      try {
-        final authService = _ref.read(authServiceProvider);
-        final user = await authService.initialize();
-        deviceId = user.deviceId;
-        logger.i('Auth service initialized, deviceId: $deviceId');
-      } catch (e, stackTrace) {
-        logger.e('Auth service init failed', error: e, stackTrace: stackTrace);
-        rethrow;
+      // ユーザー情報を取得・更新（AuthServiceをバイパスして高速化）
+      var user = localStorage.getUser();
+      if (user == null || user.deviceId != deviceId) {
+        user = AnonymousUser(
+          deviceId: deviceId,
+          createdAt: DateTime.now(),
+          lastActiveAt: DateTime.now(),
+        );
+        logger.i('New anonymous user created');
+      } else {
+        user = user.copyWith(lastActiveAt: DateTime.now());
       }
+      await localStorage.saveUser(user);
+
+      // AuthServiceにユーザーを設定
+      final authService = _ref.read(authServiceProvider);
+      authService.setCurrentUser(user);
+      logger.i('Auth service initialized, deviceId: $deviceId');
 
       // APIクライアントにデバイスIDを設定
-      try {
-        final apiClient = _ref.read(apiClientProvider);
-        apiClient.setDeviceId(deviceId);
-        logger.i('ApiClient deviceId configured');
-      } catch (e, stackTrace) {
-        logger.e('ApiClient config failed', error: e, stackTrace: stackTrace);
-        rethrow;
-      }
-
-      // 初期化完了まで最低限の時間を確保（UX向上のため）
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      final apiClient = _ref.read(apiClientProvider);
+      apiClient.setDeviceId(deviceId);
+      logger.i('ApiClient deviceId configured');
 
       state = InitializationStatus.completed;
       logger.i('App initialization completed');

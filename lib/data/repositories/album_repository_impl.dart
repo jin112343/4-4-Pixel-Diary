@@ -112,7 +112,7 @@ class AlbumRepositoryImpl implements AlbumRepository {
   Future<Either<Failure, void>> sync() async {
     try {
       // サーバーからアルバムを取得
-      final response = await _apiClient.get(ApiConstants.albumEndpoint);
+      final response = await _apiClient.get<dynamic>(ApiConstants.albumEndpoint);
 
       if (response.data is List) {
         final serverArts = (response.data as List)

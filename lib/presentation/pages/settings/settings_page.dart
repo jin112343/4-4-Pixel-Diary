@@ -145,45 +145,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
                 const Divider(),
 
-                // Bluetooth設定
-                SwitchListTile(
-                  secondary: Icon(
-                    Icons.bluetooth,
-                    color: kIsWeb ? Colors.grey : null,
-                  ),
-                  title: Text(
-                    'すれ違い通信',
-                    style: kIsWeb
-                        ? const TextStyle(color: Colors.grey)
-                        : null,
-                  ),
-                  subtitle: Text(
-                    kIsWeb ? 'Webでは利用できません' : 'バックグラウンドで有効',
-                    style: kIsWeb
-                        ? const TextStyle(color: Colors.grey)
-                        : null,
-                  ),
-                  value: kIsWeb
-                      ? false
-                      : (state.user?.settings.bluetoothEnabled ?? false),
-                  onChanged: kIsWeb
-                      ? (value) {
-                          WebUnsupportedDialog.show(
-                            context,
-                            featureName: 'すれ違い通信',
-                            description: 'Bluetooth機能はスマートフォンアプリでのみ利用できます。',
-                            iconData: Icons.bluetooth_disabled,
-                          );
-                        }
-                      : (value) {
-                          ref
-                              .read(settingsViewModelProvider.notifier)
-                              .toggleBluetooth(value);
-                        },
-                ),
-
-                const Divider(),
-
                 // アプリ情報
                 ListTile(
                   leading: const Icon(Icons.info),

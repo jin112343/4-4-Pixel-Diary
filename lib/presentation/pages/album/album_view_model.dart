@@ -5,7 +5,6 @@ import '../../../core/utils/logger.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../domain/repositories/album_repository.dart';
 import '../../../providers/app_providers.dart';
-import '../../../services/auth/anonymous_auth_service.dart';
 
 part 'album_view_model.freezed.dart';
 

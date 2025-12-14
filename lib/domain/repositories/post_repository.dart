@@ -1,6 +1,7 @@
 import 'package:fpdart/fpdart.dart';
 
 import '../../core/errors/failures.dart';
+import '../entities/comment.dart';
 import '../entities/post.dart';
 
 /// 投稿の並び順
@@ -51,4 +52,16 @@ abstract class PostRepository {
     required String postId,
     required String reason,
   });
+
+  /// コメント一覧を取得
+  Future<Either<Failure, List<Comment>>> getComments(String postId);
+
+  /// コメントを追加
+  Future<Either<Failure, Comment>> addComment({
+    required String postId,
+    required String content,
+  });
+
+  /// コメントを削除
+  Future<Either<Failure, void>> deleteComment(String commentId);
 }

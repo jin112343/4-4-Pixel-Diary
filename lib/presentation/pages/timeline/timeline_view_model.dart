@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import '../../../core/utils/logger.dart';
+import '../../../domain/entities/comment.dart';
 import '../../../domain/entities/post.dart';
 import '../../../domain/repositories/post_repository.dart';
 import '../../../providers/app_providers.dart';
@@ -32,6 +33,15 @@ class TimelineState with _$TimelineState {
 
     /// さらに読み込み可能か
     @Default(true) bool hasMore,
+
+    /// 選択中の投稿（コメント表示用）
+    Post? selectedPost,
+
+    /// コメント読み込み中かどうか
+    @Default(false) bool isLoadingComments,
+
+    /// コメントリスト
+    @Default([]) List<Comment> comments,
   }) = _TimelineState;
 }
 
@@ -221,6 +231,131 @@ class TimelineViewModel extends StateNotifier<TimelineState> {
   /// エラーをクリア
   void clearError() {
     state = state.copyWith(errorMessage: null);
+  }
+
+  /// 投稿を選択してコメントを読み込む
+  Future<void> selectPost(Post post) async {
+    state = state.copyWith(
+      selectedPost: post,
+      comments: [],
+      isLoadingComments: true,
+    );
+
+    try {
+      final result = await _postRepository.getComments(post.id);
+      result.fold(
+        (failure) {
+          state = state.copyWith(
+            isLoadingComments: false,
+            errorMessage: failure.message,
+          );
+          logger.e('Failed to load comments: ${failure.message}');
+        },
+        (comments) {
+          state = state.copyWith(
+            isLoadingComments: false,
+            comments: comments,
+          );
+          logger.i('Loaded ${comments.length} comments');
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Load comments error', error: e, stackTrace: stackTrace);
+      state = state.copyWith(
+        isLoadingComments: false,
+        errorMessage: 'コメントの読み込みに失敗しました',
+      );
+    }
+  }
+
+  /// 選択中の投稿をクリア
+  void clearSelectedPost() {
+    state = state.copyWith(
+      selectedPost: null,
+      comments: [],
+    );
+  }
+
+  /// コメントを追加
+  Future<bool> addComment(String content) async {
+    if (state.selectedPost == null) return false;
+
+    try {
+      final result = await _postRepository.addComment(
+        postId: state.selectedPost!.id,
+        content: content,
+      );
+
+      return result.fold(
+        (failure) {
+          state = state.copyWith(errorMessage: failure.message);
+          logger.e('Failed to add comment: ${failure.message}');
+          return false;
+        },
+        (comment) {
+          state = state.copyWith(
+            comments: [...state.comments, comment],
+          );
+          // 投稿のコメント数を更新
+          _updatePostCommentCount(state.selectedPost!.id, 1);
+          logger.i('Comment added: ${comment.id}');
+          return true;
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Add comment error', error: e, stackTrace: stackTrace);
+      state = state.copyWith(errorMessage: 'コメントの投稿に失敗しました');
+      return false;
+    }
+  }
+
+  /// コメントを削除
+  Future<bool> deleteComment(String commentId) async {
+    try {
+      final result = await _postRepository.deleteComment(commentId);
+
+      return result.fold(
+        (failure) {
+          state = state.copyWith(errorMessage: failure.message);
+          logger.e('Failed to delete comment: ${failure.message}');
+          return false;
+        },
+        (_) {
+          state = state.copyWith(
+            comments: state.comments.where((c) => c.id != commentId).toList(),
+          );
+          // 投稿のコメント数を更新
+          if (state.selectedPost != null) {
+            _updatePostCommentCount(state.selectedPost!.id, -1);
+          }
+          logger.i('Comment deleted: $commentId');
+          return true;
+        },
+      );
+    } catch (e, stackTrace) {
+      logger.e('Delete comment error', error: e, stackTrace: stackTrace);
+      state = state.copyWith(errorMessage: 'コメントの削除に失敗しました');
+      return false;
+    }
+  }
+
+  /// 投稿のコメント数を更新
+  void _updatePostCommentCount(String postId, int delta) {
+    final postIndex = state.posts.indexWhere((p) => p.id == postId);
+    if (postIndex == -1) return;
+
+    final post = state.posts[postIndex];
+    final updatedPost = post.copyWith(
+      commentCount: post.commentCount + delta,
+    );
+    final updatedPosts = List<Post>.from(state.posts);
+    updatedPosts[postIndex] = updatedPost;
+    state = state.copyWith(posts: updatedPosts);
+
+    // selectedPostも更新
+    if (state.selectedPost?.id == postId) {
+      state = state.copyWith(selectedPost: updatedPost);
+    }
   }
 }
 

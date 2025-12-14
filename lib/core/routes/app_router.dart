@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../presentation/pages/home/home_page.dart';
 import '../../presentation/pages/album/album_page.dart';
 import '../../presentation/pages/timeline/timeline_page.dart';
-import '../../presentation/pages/bluetooth/bluetooth_page.dart';
 import '../../presentation/pages/calendar/calendar_page.dart';
 import '../../presentation/pages/settings/settings_page.dart';
 
@@ -17,7 +16,6 @@ class AppRoutes {
   static const String albumDetail = '/album/:id';
   static const String timeline = '/timeline';
   static const String postDetail = '/post/:id';
-  static const String bluetooth = '/bluetooth';
   static const String calendar = '/calendar';
   static const String settings = '/settings';
 }
@@ -56,15 +54,6 @@ final appRouter = GoRouter(
             GoRoute(
               path: AppRoutes.timeline,
               builder: (context, state) => const TimelinePage(),
-            ),
-          ],
-        ),
-        // すれ違い通信
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: AppRoutes.bluetooth,
-              builder: (context, state) => const BluetoothPage(),
             ),
           ],
         ),
@@ -118,10 +107,6 @@ class MainScaffold extends StatelessWidget {
           BottomNavigationBarItem(
             icon: Icon(Icons.people),
             label: 'みんな',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bluetooth),
-            label: 'すれ違い',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_month),

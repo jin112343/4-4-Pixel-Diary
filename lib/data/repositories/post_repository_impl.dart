@@ -4,6 +4,7 @@ import 'package:fpdart/fpdart.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/errors/failures.dart';
 import '../../core/utils/logger.dart';
+import '../../domain/entities/comment.dart';
 import '../../domain/entities/post.dart';
 import '../../domain/repositories/post_repository.dart';
 import '../datasources/remote/api_client.dart';
@@ -24,7 +25,7 @@ class PostRepositoryImpl implements PostRepository {
     int limit = 20,
   }) async {
     try {
-      final response = await _apiClient.get(
+      final response = await _apiClient.get<Map<String, dynamic>>(
         ApiConstants.postsEndpoint,
         queryParameters: {
           'tab': sortOrder == PostSortOrder.newest ? 'new' : 'popular',
@@ -70,7 +71,7 @@ class PostRepositoryImpl implements PostRepository {
     int limit = 20,
   }) async {
     try {
-      final response = await _apiClient.get(
+      final response = await _apiClient.get<Map<String, dynamic>>(
         '${ApiConstants.postsEndpoint}/me',
         queryParameters: {
           'limit': limit,
@@ -118,7 +119,7 @@ class PostRepositoryImpl implements PostRepository {
     required PostVisibility visibility,
   }) async {
     try {
-      final response = await _apiClient.post(
+      final response = await _apiClient.post<Map<String, dynamic>>(
         ApiConstants.postsEndpoint,
         data: {
           'pixelArtId': pixelArtId,
@@ -160,7 +161,7 @@ class PostRepositoryImpl implements PostRepository {
   @override
   Future<Either<Failure, void>> deletePost(String postId) async {
     try {
-      await _apiClient.delete('${ApiConstants.postsEndpoint}/$postId');
+      await _apiClient.delete<void>('${ApiConstants.postsEndpoint}/$postId');
       logger.i('Post deleted: $postId');
       return const Right(null);
     } on DioException catch (e) {
@@ -176,7 +177,7 @@ class PostRepositoryImpl implements PostRepository {
   @override
   Future<Either<Failure, void>> like(String postId) async {
     try {
-      await _apiClient.post(
+      await _apiClient.post<void>(
         '${ApiConstants.postsEndpoint}/$postId/like',
       );
       logger.i('Liked post: $postId');
@@ -194,7 +195,7 @@ class PostRepositoryImpl implements PostRepository {
   @override
   Future<Either<Failure, void>> unlike(String postId) async {
     try {
-      await _apiClient.delete(
+      await _apiClient.delete<void>(
         '${ApiConstants.postsEndpoint}/$postId/like',
       );
       logger.i('Unliked post: $postId');
@@ -215,7 +216,7 @@ class PostRepositoryImpl implements PostRepository {
     required String reason,
   }) async {
     try {
-      await _apiClient.post(
+      await _apiClient.post<void>(
         '${ApiConstants.postsEndpoint}/$postId/report',
         data: {'reason': reason},
       );
@@ -227,6 +228,76 @@ class PostRepositoryImpl implements PostRepository {
       return Left(ServerFailure(apiError.message, apiError.code));
     } catch (e, stackTrace) {
       logger.e('Failed to report post', error: e, stackTrace: stackTrace);
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<Comment>>> getComments(String postId) async {
+    try {
+      final response = await _apiClient.get<Map<String, dynamic>>(
+        '${ApiConstants.postsEndpoint}/$postId/comments',
+      );
+      final data = response.data;
+      if (data == null) {
+        return const Right([]);
+      }
+      final comments = (data['comments'] as List<dynamic>? ?? [])
+          .map((e) => Comment.fromJson(e as Map<String, dynamic>))
+          .toList();
+      logger.i('Fetched ${comments.length} comments for post: $postId');
+      return Right(comments);
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+      logger.e('Failed to get comments: ${apiError.message}');
+      return Left(ServerFailure(apiError.message, apiError.code));
+    } catch (e, stackTrace) {
+      logger.e('Failed to get comments', error: e, stackTrace: stackTrace);
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, Comment>> addComment({
+    required String postId,
+    required String content,
+  }) async {
+    try {
+      final response = await _apiClient.post<Map<String, dynamic>>(
+        '${ApiConstants.postsEndpoint}/$postId/comments',
+        data: {'content': content},
+      );
+      final data = response.data;
+      if (data == null) {
+        return const Left(UnknownFailure());
+      }
+      final comment = Comment.fromJson(data);
+      logger.i('Comment added to post: $postId');
+      return Right(comment);
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+      logger.e('Failed to add comment: ${apiError.message}');
+      return Left(ServerFailure(apiError.message, apiError.code));
+    } catch (e, stackTrace) {
+      logger.e('Failed to add comment', error: e, stackTrace: stackTrace);
+      return const Left(UnknownFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteComment(String commentId) async {
+    try {
+      await _apiClient.delete<void>(
+        '${ApiConstants.commentsEndpoint}/$commentId',
+      );
+      logger.i('Comment deleted: $commentId');
+      return const Right(null);
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+      logger.e('Failed to delete comment: ${apiError.message}');
+      return Left(ServerFailure(apiError.message, apiError.code));
+    } catch (e, stackTrace) {
+      logger.e('Failed to delete comment', error: e, stackTrace: stackTrace);
       return const Left(UnknownFailure());
     }
   }

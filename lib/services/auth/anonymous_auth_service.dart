@@ -26,6 +26,11 @@ class AnonymousAuthService {
   /// ユーザーが存在するか
   bool get isAuthenticated => _currentUser != null;
 
+  /// 外部からユーザーを設定（初期化の高速化用）
+  void setCurrentUser(AnonymousUser user) {
+    _currentUser = user;
+  }
+
   /// 初期化（アプリ起動時に呼び出す）
   Future<AnonymousUser> initialize() async {
     try {

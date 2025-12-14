@@ -98,16 +98,16 @@ class ModerationService {
     // 言語を推定
     final language = CharacterTypeUtil.containsJapanese(text) ? 'ja' : 'en';
 
-    final requestBody = {
-      'comment': {'text': text},
+    final requestBody = <String, dynamic>{
+      'comment': <String, dynamic>{'text': text},
       'languages': [language],
-      'requestedAttributes': {
-        'TOXICITY': {},
-        'SEVERE_TOXICITY': {},
-        'INSULT': {},
-        'PROFANITY': {},
-        'THREAT': {},
-        'IDENTITY_ATTACK': {},
+      'requestedAttributes': <String, dynamic>{
+        'TOXICITY': <String, dynamic>{},
+        'SEVERE_TOXICITY': <String, dynamic>{},
+        'INSULT': <String, dynamic>{},
+        'PROFANITY': <String, dynamic>{},
+        'THREAT': <String, dynamic>{},
+        'IDENTITY_ATTACK': <String, dynamic>{},
       },
     };
 

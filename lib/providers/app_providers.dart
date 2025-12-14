@@ -9,11 +9,8 @@ import '../data/repositories/post_repository_impl.dart';
 import '../domain/repositories/album_repository.dart';
 import '../domain/repositories/pixel_art_repository.dart';
 import '../domain/repositories/post_repository.dart';
+import '../services/ad/ad_service.dart';
 import '../services/auth/anonymous_auth_service.dart';
-import '../services/bluetooth/ble_dual_role_service.dart';
-import '../services/bluetooth/ble_notification_coordinator.dart';
-import '../services/bluetooth/ble_peripheral_native.dart';
-import '../services/bluetooth/ble_service.dart';
 import '../services/notification/notification_service.dart';
 import '../services/sync/connectivity_service.dart';
 import '../services/sync/offline_queue_service.dart';
@@ -106,49 +103,6 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
   return service;
 });
 
-/// BLEサービスプロバイダー（app_providers版）
-final appBleServiceProvider = Provider<BleService>((ref) {
-  final service = BleService();
-  ref.onDispose(() => service.dispose());
-  return service;
-});
-
-/// BLE Peripheralネイティブプロバイダー
-final blePeripheralNativeProvider = Provider<BlePeripheralNative>((ref) {
-  return BlePeripheralNative();
-});
-
-/// BLE Dual Roleサービスプロバイダー
-final bleDualRoleServiceProvider = Provider<BleDualRoleService>((ref) {
-  final centralService = ref.watch(appBleServiceProvider);
-  final peripheralNative = ref.watch(blePeripheralNativeProvider);
-
-  final service = BleDualRoleService(
-    centralService: centralService,
-    peripheralNative: peripheralNative,
-  );
-
-  ref.onDispose(() => service.dispose());
-
-  return service;
-});
-
-/// BLE通知コーディネータープロバイダー
-final bleNotificationCoordinatorProvider =
-    Provider<BleNotificationCoordinator>((ref) {
-  final bleService = ref.watch(appBleServiceProvider);
-  final notificationService = ref.watch(notificationServiceProvider);
-
-  final coordinator = BleNotificationCoordinator(
-    bleService: bleService,
-    notificationService: notificationService,
-  );
-
-  ref.onDispose(() => coordinator.dispose());
-
-  return coordinator;
-});
-
 /// 未読通知数プロバイダー
 final unreadNotificationCountProvider = StreamProvider<int>((ref) {
   final notificationService = ref.watch(notificationServiceProvider);
@@ -161,3 +115,41 @@ final notificationPermissionProvider =
   final notificationService = ref.watch(notificationServiceProvider);
   return notificationService.getNotificationPermissionStatus();
 });
+
+/// 広告サービスプロバイダー
+final adServiceProvider = Provider<AdService>((ref) {
+  return AdService.instance;
+});
+
+/// 交換回数カウントキー
+const String _exchangeCountKey = 'exchange_count';
+
+/// 交換回数プロバイダー
+final exchangeCountProvider =
+    StateNotifierProvider<ExchangeCountNotifier, int>((ref) {
+  final localStorage = ref.watch(localStorageProvider);
+  return ExchangeCountNotifier(localStorage);
+});
+
+/// 交換回数の状態管理
+class ExchangeCountNotifier extends StateNotifier<int> {
+  ExchangeCountNotifier(this._localStorage) : super(0) {
+    _loadCount();
+  }
+
+  final LocalStorage _localStorage;
+
+  void _loadCount() {
+    final count = _localStorage.getSetting<int>(_exchangeCountKey) ?? 0;
+    state = count;
+  }
+
+  /// 交換回数をインクリメント
+  Future<void> increment() async {
+    state = state + 1;
+    await _localStorage.saveSetting(_exchangeCountKey, state);
+  }
+
+  /// 広告を表示すべきかどうか（3回に1回）
+  bool get shouldShowAd => state > 0 && state % 3 == 0;
+}

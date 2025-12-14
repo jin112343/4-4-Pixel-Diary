@@ -11,10 +11,10 @@ class LocalStorage {
   static const String _userBoxName = 'user';
   static const String _settingsBoxName = 'settings';
 
-  Box<Map>? _pixelArtBox;
-  Box<Map>? _albumBox;
-  Box<Map>? _userBox;
-  Box<Map>? _settingsBox;
+  Box<Map<dynamic, dynamic>>? _pixelArtBox;
+  Box<Map<dynamic, dynamic>>? _albumBox;
+  Box<Map<dynamic, dynamic>>? _userBox;
+  Box<Map<dynamic, dynamic>>? _settingsBox;
 
   bool _isInitialized = false;
 
@@ -30,11 +30,18 @@ class LocalStorage {
     }
 
     try {
-      // 各ボックスを安全に開く（破損時はリカバリー）
-      _pixelArtBox = await _openBoxSafely(_pixelArtBoxName);
-      _albumBox = await _openBoxSafely(_albumBoxName);
-      _userBox = await _openBoxSafely(_userBoxName);
-      _settingsBox = await _openBoxSafely(_settingsBoxName);
+      // 各ボックスを並列で安全に開く（破損時はリカバリー）
+      final results = await Future.wait([
+        _openBoxSafely(_pixelArtBoxName),
+        _openBoxSafely(_albumBoxName),
+        _openBoxSafely(_userBoxName),
+        _openBoxSafely(_settingsBoxName),
+      ]);
+
+      _pixelArtBox = results[0];
+      _albumBox = results[1];
+      _userBox = results[2];
+      _settingsBox = results[3];
 
       _isInitialized = true;
       logger.i('LocalStorage initialized');
@@ -49,14 +56,14 @@ class LocalStorage {
   }
 
   /// ボックスを安全に開く（破損時は削除して再作成）
-  Future<Box<Map>> _openBoxSafely(String boxName) async {
+  Future<Box<Map<dynamic, dynamic>>> _openBoxSafely(String boxName) async {
     // 既に開いているボックスがあれば再利用
     if (Hive.isBoxOpen(boxName)) {
-      return Hive.box<Map>(boxName);
+      return Hive.box<Map<dynamic, dynamic>>(boxName);
     }
 
     try {
-      return await Hive.openBox<Map>(boxName);
+      return await Hive.openBox<Map<dynamic, dynamic>>(boxName);
     } catch (e, stackTrace) {
       logger.w(
         'Box "$boxName" corrupted, attempting recovery',
@@ -68,7 +75,7 @@ class LocalStorage {
       try {
         await Hive.deleteBoxFromDisk(boxName);
         logger.i('Deleted corrupted box: $boxName');
-        return await Hive.openBox<Map>(boxName);
+        return await Hive.openBox<Map<dynamic, dynamic>>(boxName);
       } catch (deleteError, deleteStackTrace) {
         logger.e(
           'Failed to recover box "$boxName"',

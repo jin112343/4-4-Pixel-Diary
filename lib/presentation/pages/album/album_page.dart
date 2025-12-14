@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../../core/constants/color_constants.dart';
 import '../../../core/routes/app_router.dart';
+import '../../../core/utils/logger.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../domain/entities/post.dart';
 import '../../../providers/app_providers.dart';
+import '../../../services/ad/ad_service.dart';
 import 'album_view_model.dart';
 
 /// アルバム画面
@@ -184,45 +187,124 @@ class _AlbumContent extends ConsumerWidget {
   }
 }
 
-/// 空の状態
-class _EmptyState extends StatelessWidget {
+/// 空の状態（全面広告表示）
+class _EmptyState extends StatefulWidget {
   const _EmptyState();
+
+  @override
+  State<_EmptyState> createState() => _EmptyStateState();
+}
+
+class _EmptyStateState extends State<_EmptyState> {
+  NativeAd? _nativeAd;
+  bool _isAdLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  @override
+  void dispose() {
+    _nativeAd?.dispose();
+    super.dispose();
+  }
+
+  void _loadAd() {
+    _nativeAd = NativeAd(
+      adUnitId: AdService.instance.nativeAdUnitId,
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() {
+              _isAdLoaded = true;
+            });
+          }
+          logger.d('Empty state native ad loaded');
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          logger.e(
+            'Empty state native ad failed to load',
+            error: error,
+          );
+        },
+      ),
+      request: const AdRequest(),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: TemplateType.medium,
+        mainBackgroundColor: Colors.white,
+        cornerRadius: 12,
+        callToActionTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white,
+          backgroundColor: Colors.blue,
+          style: NativeTemplateFontStyle.bold,
+          size: 14,
+        ),
+        primaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.black87,
+          style: NativeTemplateFontStyle.bold,
+          size: 16,
+        ),
+        secondaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.grey,
+          style: NativeTemplateFontStyle.normal,
+          size: 12,
+        ),
+      ),
+    );
+    _nativeAd!.load();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.photo_album_outlined,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'まだ届いたドット絵がありません',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_album_outlined,
+              size: 64,
+              color: Colors.grey[400],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '「こうかんする」で交換したり\n「すれちがい」で受け取ると\nここに保存されます',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
+            const SizedBox(height: 16),
+            Text(
+              'まだ届いたドット絵がありません',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              '「こうかんする」で交換したり\n「すれちがい」で受け取ると\nここに保存されます',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
+            const SizedBox(height: 32),
+            // 広告表示
+            if (_isAdLoaded && _nativeAd != null)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: 350,
+                ),
+                child: AdWidget(ad: _nativeAd!),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// アルバムグリッド
+/// アルバムグリッド（3枚に1つ広告を表示）
 class _AlbumGrid extends ConsumerWidget {
   const _AlbumGrid({
     required this.userId,
@@ -232,9 +314,33 @@ class _AlbumGrid extends ConsumerWidget {
   final String userId;
   final AlbumState state;
 
+  /// 広告の数を計算
+  int _getAdCount(int albumCount) {
+    if (albumCount == 0) return 0;
+    return (albumCount + 2) ~/ 3;
+  }
+
+  /// 総表示アイテム数を計算
+  int _getTotalDisplayCount(int albumCount) {
+    return albumCount + _getAdCount(albumCount);
+  }
+
+  /// 表示位置が広告かどうかを判定
+  /// 位置1, 4, 7, 10... が広告
+  bool _isAdPosition(int displayIndex) {
+    return displayIndex > 0 && (displayIndex - 1) % 3 == 0;
+  }
+
+  /// 表示位置からアルバムインデックスを計算
+  int _getAlbumIndex(int displayIndex) {
+    return displayIndex - (displayIndex + 1) ~/ 3;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(albumViewModelProvider(userId).notifier);
+    final albumCount = state.pixelArts.length;
+    final totalDisplayCount = _getTotalDisplayCount(albumCount);
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -252,9 +358,10 @@ class _AlbumGrid extends ConsumerWidget {
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
-        itemCount: state.pixelArts.length + (state.hasMore ? 1 : 0),
+        itemCount: totalDisplayCount + (state.hasMore ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index >= state.pixelArts.length) {
+          // ローディングインジケーター
+          if (index >= totalDisplayCount) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -263,7 +370,18 @@ class _AlbumGrid extends ConsumerWidget {
             );
           }
 
-          final pixelArt = state.pixelArts[index];
+          // 広告位置の場合
+          if (_isAdPosition(index)) {
+            return _NativeAdItem(key: ValueKey('ad_$index'));
+          }
+
+          // アルバムアイテム
+          final albumIndex = _getAlbumIndex(index);
+          if (albumIndex >= state.pixelArts.length) {
+            return const SizedBox.shrink();
+          }
+
+          final pixelArt = state.pixelArts[albumIndex];
           final isSelected = state.selectedIds.contains(pixelArt.id);
 
           return _AlbumItem(
@@ -301,6 +419,106 @@ class _AlbumGrid extends ConsumerWidget {
         pixelArt: pixelArt,
         userId: userId,
       ),
+    );
+  }
+}
+
+/// ネイティブ広告アイテム
+class _NativeAdItem extends StatefulWidget {
+  const _NativeAdItem({super.key});
+
+  @override
+  State<_NativeAdItem> createState() => _NativeAdItemState();
+}
+
+class _NativeAdItemState extends State<_NativeAdItem> {
+  NativeAd? _nativeAd;
+  bool _isAdLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  @override
+  void dispose() {
+    _nativeAd?.dispose();
+    super.dispose();
+  }
+
+  void _loadAd() {
+    _nativeAd = NativeAd(
+      adUnitId: AdService.instance.nativeAdUnitId,
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) {
+            setState(() {
+              _isAdLoaded = true;
+            });
+          }
+          logger.d('Grid native ad loaded');
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          logger.e('Grid native ad failed to load', error: error);
+        },
+      ),
+      request: const AdRequest(),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: TemplateType.small,
+        mainBackgroundColor: Colors.white,
+        cornerRadius: 8,
+        callToActionTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.white,
+          backgroundColor: Colors.blue,
+          style: NativeTemplateFontStyle.bold,
+          size: 12,
+        ),
+        primaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.black87,
+          style: NativeTemplateFontStyle.bold,
+          size: 12,
+        ),
+        secondaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.grey,
+          style: NativeTemplateFontStyle.normal,
+          size: 10,
+        ),
+      ),
+    );
+    _nativeAd!.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: _isAdLoaded && _nativeAd != null
+          ? AdWidget(ad: _nativeAd!)
+          : Container(
+              color: Colors.grey[100],
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.ad_units,
+                      color: Colors.grey,
+                      size: 24,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '広告',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

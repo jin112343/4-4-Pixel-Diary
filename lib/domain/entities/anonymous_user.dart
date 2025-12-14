@@ -43,12 +43,6 @@ class UserSettings with _$UserSettings {
 
     /// 通知有効
     @Default(true) bool notificationsEnabled,
-
-    /// Bluetooth有効
-    @Default(false) bool bluetoothEnabled,
-
-    /// 自動交換モード
-    @Default(false) bool autoExchangeMode,
   }) = _UserSettings;
 
   factory UserSettings.fromJson(Map<String, dynamic> json) =>

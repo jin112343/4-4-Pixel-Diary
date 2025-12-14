@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 import 'core/utils/logger.dart';
+import 'services/ad/ad_service.dart';
 import 'services/security/security_service.dart';
 import 'services/sync/connectivity_service.dart';
 import 'services/sync/offline_queue_service.dart';
@@ -17,17 +18,17 @@ late final SecurityService securityService;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 日本語ロケール初期化
-  await initializeDateFormatting('ja_JP');
+  // 独立した初期化を並列実行
+  await Future.wait([
+    initializeDateFormatting('ja_JP'),
+    _initializeHive(),
+  ]);
 
-  // Hive初期化
-  await _initializeHive();
-
-  // サービス初期化
+  // サービス初期化（Hive依存のため順次実行）
   await _initializeServices();
 
-  // セキュリティチェック
-  await _performSecurityCheck();
+  // セキュリティチェックはバックグラウンドで実行（起動をブロックしない）
+  _performSecurityCheck();
 
   // アプリ起動
   runApp(
@@ -37,13 +38,29 @@ Future<void> main() async {
   );
 }
 
-/// Hiveの初期化
+/// Hiveの初期化とボックスの事前オープン
 Future<void> _initializeHive() async {
   try {
     await Hive.initFlutter();
-    logger.i('Hive initialized successfully');
+
+    // Hiveボックスを並列で事前オープン（initialization_providerでの待ち時間を削減）
+    await Future.wait([
+      _openBoxIfNeeded<Map<dynamic, dynamic>>('pixel_arts'),
+      _openBoxIfNeeded<Map<dynamic, dynamic>>('album'),
+      _openBoxIfNeeded<Map<dynamic, dynamic>>('user'),
+      _openBoxIfNeeded<Map<dynamic, dynamic>>('settings'),
+    ]);
+
+    logger.i('Hive initialized with boxes pre-opened');
   } catch (e, stackTrace) {
     logger.e('Failed to initialize Hive', error: e, stackTrace: stackTrace);
+  }
+}
+
+/// ボックスを安全にオープン
+Future<void> _openBoxIfNeeded<T>(String boxName) async {
+  if (!Hive.isBoxOpen(boxName)) {
+    await Hive.openBox<T>(boxName);
   }
 }
 
@@ -60,6 +77,9 @@ Future<void> _initializeServices() async {
 
     // セキュリティサービス
     securityService = SecurityService();
+
+    // 広告サービス
+    await AdService.instance.initialize();
 
     logger.i('Services initialized successfully');
   } catch (e, stackTrace) {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/routes/app_router.dart';
+import '../../../providers/app_providers.dart';
 import '../album/album_view_model.dart';
 import 'home_view_model.dart';
 import 'widgets/pixel_canvas.dart';
@@ -259,9 +260,13 @@ class _ExchangeButton extends ConsumerWidget {
     final titleError = ref.watch(
       homeViewModelProvider.select((state) => state.titleError),
     );
+    final exchangeCount = ref.watch(exchangeCountProvider);
 
     // NGワードエラーがある場合はボタンを無効化
     final isDisabled = isExchanging || titleError != null;
+
+    // 次の交換で広告を表示するかどうか（3回に1回: 3, 6, 9...回目）
+    final willShowAd = (exchangeCount + 1) % 3 == 0;
 
     return SizedBox(
       width: double.infinity,
@@ -269,7 +274,7 @@ class _ExchangeButton extends ConsumerWidget {
       child: ElevatedButton(
         onPressed: isDisabled
             ? null
-            : () => ref.read(homeViewModelProvider.notifier).exchange(),
+            : () => _onExchangePressed(context, ref, willShowAd),
         style: ElevatedButton.styleFrom(
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -289,5 +294,37 @@ class _ExchangeButton extends ConsumerWidget {
               ),
       ),
     );
+  }
+
+  /// 交換ボタン押下時の処理
+  Future<void> _onExchangePressed(
+    BuildContext context,
+    WidgetRef ref,
+    bool willShowAd,
+  ) async {
+    // 交換回数をインクリメント
+    await ref.read(exchangeCountProvider.notifier).increment();
+
+    if (willShowAd) {
+      // 3回に1回広告を表示
+      final adService = ref.read(adServiceProvider);
+      final adShown = await adService.showRewardedAd(
+        onRewarded: () {
+          // 広告視聴完了後に交換を実行
+          ref.read(homeViewModelProvider.notifier).exchange();
+        },
+        onAdDismissed: () {
+          // 広告が閉じられた（視聴完了はonRewardedで処理済み）
+        },
+      );
+
+      // 広告が表示できなかった場合はそのまま交換を実行
+      if (!adShown) {
+        ref.read(homeViewModelProvider.notifier).exchange();
+      }
+    } else {
+      // 広告なしで交換を実行
+      ref.read(homeViewModelProvider.notifier).exchange();
+    }
   }
 }

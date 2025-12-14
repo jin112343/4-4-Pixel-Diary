@@ -19,7 +19,9 @@ class ReceivedArtDialog extends StatelessWidget {
   /// Viewportを使わないピクセルグリッドを構築
   Widget _buildPixelGrid(double size) {
     final gridSize = pixelArt.gridSize;
-    final cellSize = (size - 4) / gridSize; // size - border width
+    // 外側border(2px*2) + セルborder(0.5px * gridSize)を考慮
+    final totalBorderWidth = 4 + gridSize * 0.5;
+    final cellSize = (size - totalBorderWidth) / gridSize;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -73,6 +75,7 @@ class ReceivedArtDialog extends StatelessWidget {
               Container(
                 width: artSize,
                 height: artSize,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: ColorConstants.gridLineColor,

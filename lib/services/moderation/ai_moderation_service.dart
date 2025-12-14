@@ -167,16 +167,16 @@ class AiModerationService {
       final languageCode = language == TextLanguage.japanese ? 'ja' : 'en';
 
       // リクエストボディ
-      final requestBody = {
-        'comment': {'text': text},
+      final requestBody = <String, dynamic>{
+        'comment': <String, dynamic>{'text': text},
         'languages': [languageCode],
-        'requestedAttributes': {
-          'TOXICITY': {},
-          'SEVERE_TOXICITY': {},
-          'IDENTITY_ATTACK': {},
-          'INSULT': {},
-          'PROFANITY': {},
-          'THREAT': {},
+        'requestedAttributes': <String, dynamic>{
+          'TOXICITY': <String, dynamic>{},
+          'SEVERE_TOXICITY': <String, dynamic>{},
+          'IDENTITY_ATTACK': <String, dynamic>{},
+          'INSULT': <String, dynamic>{},
+          'PROFANITY': <String, dynamic>{},
+          'THREAT': <String, dynamic>{},
         },
         'doNotStore': true, // プライバシー保護
       };
@@ -257,13 +257,15 @@ class AiModerationService {
     try {
       // AWS Comprehend Toxicity Detection API
       // 実際の実装ではaws_signatureなどで署名が必要
-      final uri = Uri.parse(
+      // ignore: unused_local_variable
+      final _ = Uri.parse(
         'https://comprehend.$_awsRegion.amazonaws.com/',
       );
 
-      final requestBody = {
+      // ignore: unused_local_variable
+      final __ = <String, dynamic>{
         'TextSegments': [
-          {'Text': text}
+          <String, dynamic>{'Text': text}
         ],
         'LanguageCode': 'en',
       };
