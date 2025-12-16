@@ -17,6 +17,14 @@ enum SyncStatus {
 
 /// オフラインデータの同期を管理するサービス
 class SyncService {
+  SyncService({
+    required ConnectivityService connectivityService,
+    required OfflineQueueService offlineQueueService,
+    required ApiClient apiClient,
+  })  : _connectivityService = connectivityService,
+        _offlineQueueService = offlineQueueService,
+        _apiClient = apiClient;
+
   final ConnectivityService _connectivityService;
   final OfflineQueueService _offlineQueueService;
   final ApiClient _apiClient;
@@ -35,14 +43,6 @@ class SyncService {
 
   /// 同期進捗を監視（0.0 - 1.0）
   Stream<double> get onProgress => _progressController.stream;
-
-  SyncService({
-    required ConnectivityService connectivityService,
-    required OfflineQueueService offlineQueueService,
-    required ApiClient apiClient,
-  })  : _connectivityService = connectivityService,
-        _offlineQueueService = offlineQueueService,
-        _apiClient = apiClient;
 
   /// 初期化
   Future<void> init() async {

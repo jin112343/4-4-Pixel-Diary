@@ -263,7 +263,7 @@ class AiModerationService {
       );
 
       // ignore: unused_local_variable
-      final __ = <String, dynamic>{
+      final requestBody = <String, dynamic>{
         'TextSegments': [
           <String, dynamic>{'Text': text}
         ],
@@ -396,20 +396,6 @@ enum ModerationStatus {
 
 /// モデレーションスコア
 class ModerationScores {
-  final double toxicity;
-  final double severeToxicity;
-  final double identityAttack;
-  final double insult;
-  final double profanity;
-  final double threat;
-
-  // AWS Comprehend用の追加スコア
-  final double? hateSpeeech;
-  final double? graphic;
-  final double? harassmentOrAbuse;
-  final double? sexualContent;
-  final double? violenceOrThreat;
-
   const ModerationScores({
     this.toxicity = 0.0,
     this.severeToxicity = 0.0,
@@ -423,6 +409,31 @@ class ModerationScores {
     this.sexualContent,
     this.violenceOrThreat,
   });
+
+  factory ModerationScores.fromJson(Map<String, dynamic> json) {
+    return ModerationScores(
+      toxicity: (json['toxicity'] as num?)?.toDouble() ?? 0.0,
+      severeToxicity: (json['severeToxicity'] as num?)?.toDouble() ?? 0.0,
+      identityAttack: (json['identityAttack'] as num?)?.toDouble() ?? 0.0,
+      insult: (json['insult'] as num?)?.toDouble() ?? 0.0,
+      profanity: (json['profanity'] as num?)?.toDouble() ?? 0.0,
+      threat: (json['threat'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  final double toxicity;
+  final double severeToxicity;
+  final double identityAttack;
+  final double insult;
+  final double profanity;
+  final double threat;
+
+  // AWS Comprehend用の追加スコア
+  final double? hateSpeeech;
+  final double? graphic;
+  final double? harassmentOrAbuse;
+  final double? sexualContent;
+  final double? violenceOrThreat;
 
   /// 最大スコアを取得
   double get maxScore => [
@@ -440,17 +451,6 @@ class ModerationScores {
         identityAttack,
         threat,
       ].reduce((a, b) => a > b ? a : b);
-
-  factory ModerationScores.fromJson(Map<String, dynamic> json) {
-    return ModerationScores(
-      toxicity: (json['toxicity'] as num?)?.toDouble() ?? 0.0,
-      severeToxicity: (json['severeToxicity'] as num?)?.toDouble() ?? 0.0,
-      identityAttack: (json['identityAttack'] as num?)?.toDouble() ?? 0.0,
-      insult: (json['insult'] as num?)?.toDouble() ?? 0.0,
-      profanity: (json['profanity'] as num?)?.toDouble() ?? 0.0,
-      threat: (json['threat'] as num?)?.toDouble() ?? 0.0,
-    );
-  }
 
   Map<String, dynamic> toJson() => {
         'toxicity': toxicity,
@@ -475,12 +475,6 @@ class ModerationScores {
 
 /// モデレーション結果
 class ModerationResult {
-  final ModerationSource source;
-  final ModerationScores? scores;
-  final ModerationStatus status;
-  final String? errorMessage;
-  final DateTime timestamp;
-
   ModerationResult({
     required this.source,
     this.scores,
@@ -525,6 +519,12 @@ class ModerationResult {
       errorMessage: json['errorMessage'] as String?,
     );
   }
+
+  final ModerationSource source;
+  final ModerationScores? scores;
+  final ModerationStatus status;
+  final String? errorMessage;
+  final DateTime timestamp;
 
   /// 有害かどうか
   bool isToxic(double threshold) {
@@ -592,12 +592,6 @@ class ModerationResult {
 
 /// モデレーションサービス状態
 class ModerationServiceStatus {
-  final bool perspectiveConfigured;
-  final bool comprehendConfigured;
-  final double toxicityThreshold;
-  final double severeToxicityThreshold;
-  final int cacheSize;
-
   const ModerationServiceStatus({
     required this.perspectiveConfigured,
     required this.comprehendConfigured,
@@ -605,6 +599,12 @@ class ModerationServiceStatus {
     required this.severeToxicityThreshold,
     required this.cacheSize,
   });
+
+  final bool perspectiveConfigured;
+  final bool comprehendConfigured;
+  final double toxicityThreshold;
+  final double severeToxicityThreshold;
+  final int cacheSize;
 
   bool get isConfigured => perspectiveConfigured || comprehendConfigured;
 

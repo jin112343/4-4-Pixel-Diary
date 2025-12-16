@@ -125,8 +125,6 @@ final legacyModerationServiceProvider = Provider<ModerationService>((ref) {
 
 /// カテゴリブロッキング設定
 class CategoryBlockingConfig {
-  final Map<NgWordCategory, bool> blocking;
-
   const CategoryBlockingConfig({required this.blocking});
 
   /// 任天堂レベル（すべてブロック）
@@ -140,7 +138,7 @@ class CategoryBlockingConfig {
 
   /// 厳格設定（ほとんどブロック）
   factory CategoryBlockingConfig.strict() {
-    return CategoryBlockingConfig(
+    return const CategoryBlockingConfig(
       blocking: {
         NgWordCategory.violence: true,
         NgWordCategory.sexual: true,
@@ -156,7 +154,7 @@ class CategoryBlockingConfig {
 
   /// 通常設定
   factory CategoryBlockingConfig.normal() {
-    return CategoryBlockingConfig(
+    return const CategoryBlockingConfig(
       blocking: {
         NgWordCategory.violence: true,
         NgWordCategory.sexual: true,
@@ -169,6 +167,8 @@ class CategoryBlockingConfig {
       },
     );
   }
+
+  final Map<NgWordCategory, bool> blocking;
 
   /// カテゴリがブロックされているか
   bool isBlocked(NgWordCategory category) {
@@ -253,8 +253,6 @@ final filterStrictnessNotifierProvider =
 });
 
 class FilterStrictnessNotifier {
-  final Ref _ref;
-
   FilterStrictnessNotifier(this._ref) {
     // 初期設定を適用
     _applyStrictness(_ref.read(filterStrictnessProvider));
@@ -264,6 +262,8 @@ class FilterStrictnessNotifier {
       _applyStrictness(next);
     });
   }
+
+  final Ref _ref;
 
   void _applyStrictness(FilterStrictness strictness) {
     ContentFilter.setStrictness(strictness);
@@ -297,11 +297,6 @@ final quickContentCheckProvider =
 
 /// リアルタイムテキスト検証用ステート
 class TextValidationState {
-  final String text;
-  final bool isValid;
-  final String? errorMessage;
-  final bool isChecking;
-
   const TextValidationState({
     required this.text,
     required this.isValid,
@@ -317,6 +312,11 @@ class TextValidationState {
       isChecking: false,
     );
   }
+
+  final String text;
+  final bool isValid;
+  final String? errorMessage;
+  final bool isChecking;
 
   TextValidationState copyWith({
     String? text,
@@ -335,9 +335,9 @@ class TextValidationState {
 
 /// テキスト検証Notifier
 class TextValidationNotifier extends StateNotifier<TextValidationState> {
-  final ModerationService _service;
-
   TextValidationNotifier(this._service) : super(TextValidationState.initial());
+
+  final ModerationService _service;
 
   /// テキストを検証（デバウンス用に非同期）
   Future<void> validate(String text) async {
@@ -399,6 +399,16 @@ final commentValidationProvider =
 
 /// 統合モデレーション結果
 class UnifiedModerationResult {
+  const UnifiedModerationResult({
+    required this.localResult,
+    this.aiResult,
+    required this.isAllowed,
+    this.blockReason,
+    this.detailedMessage,
+    required this.riskScore,
+    required this.detectedCategories,
+  });
+
   /// ローカルフィルタ結果
   final ContentCheckResult localResult;
 
@@ -420,16 +430,6 @@ class UnifiedModerationResult {
   /// 検出されたカテゴリ
   final Set<NgWordCategory> detectedCategories;
 
-  const UnifiedModerationResult({
-    required this.localResult,
-    this.aiResult,
-    required this.isAllowed,
-    this.blockReason,
-    this.detailedMessage,
-    required this.riskScore,
-    required this.detectedCategories,
-  });
-
   /// ユーザー向けメッセージ
   String get userMessage {
     if (isAllowed) return '';
@@ -448,11 +448,11 @@ class UnifiedModerationResult {
 /// 統合モデレーションNotifier
 class UnifiedModerationNotifier
     extends StateNotifier<AsyncValue<UnifiedModerationResult?>> {
-  final ai.AiModerationService _aiService;
-  final ModerationConfig _config;
-
   UnifiedModerationNotifier(this._aiService, this._config)
       : super(const AsyncValue.data(null));
+
+  final ai.AiModerationService _aiService;
+  final ModerationConfig _config;
 
   /// フルモデレーション（ローカル + AI）
   Future<UnifiedModerationResult> moderate(String text) async {
@@ -686,17 +686,17 @@ final quickUnifiedCheckProvider =
 
 /// モデレーションシステム全体の状態
 class ModerationSystemState {
-  final FilterStrictness strictness;
-  final CategoryBlockingConfig categoryBlocking;
-  final bool aiEnabled;
-  final ai.ModerationServiceStatus? aiStatus;
-
   const ModerationSystemState({
     required this.strictness,
     required this.categoryBlocking,
     required this.aiEnabled,
     this.aiStatus,
   });
+
+  final FilterStrictness strictness;
+  final CategoryBlockingConfig categoryBlocking;
+  final bool aiEnabled;
+  final ai.ModerationServiceStatus? aiStatus;
 }
 
 /// モデレーションシステム状態プロバイダー
@@ -726,6 +726,26 @@ final isAiModerationEnabledProvider = Provider<bool>((ref) {
 
 /// ハイブリッドモデレーション結果
 class HybridModerationResult {
+  const HybridModerationResult({
+    this.remoteResult,
+    this.localResult,
+    required this.isAllowed,
+    this.blockReason,
+    required this.userMessage,
+    required this.source,
+    required this.riskScore,
+  });
+
+  /// クリーンな結果
+  factory HybridModerationResult.clean() {
+    return const HybridModerationResult(
+      isAllowed: true,
+      userMessage: '',
+      source: ModerationSource.local,
+      riskScore: 0.0,
+    );
+  }
+
   /// サーバーサイド結果
   final RemoteModerationResult? remoteResult;
 
@@ -746,26 +766,6 @@ class HybridModerationResult {
 
   /// リスクスコア（0.0-1.0）
   final double riskScore;
-
-  const HybridModerationResult({
-    this.remoteResult,
-    this.localResult,
-    required this.isAllowed,
-    this.blockReason,
-    required this.userMessage,
-    required this.source,
-    required this.riskScore,
-  });
-
-  /// クリーンな結果
-  factory HybridModerationResult.clean() {
-    return const HybridModerationResult(
-      isAllowed: true,
-      userMessage: '',
-      source: ModerationSource.local,
-      riskScore: 0.0,
-    );
-  }
 }
 
 /// モデレーションソース
@@ -783,11 +783,11 @@ enum ModerationSource {
 /// ハイブリッドモデレーションNotifier
 class HybridModerationNotifier
     extends StateNotifier<AsyncValue<HybridModerationResult?>> {
-  final RemoteModerationService _remoteService;
-  final ModerationService _localService;
-
   HybridModerationNotifier(this._remoteService, this._localService)
       : super(const AsyncValue.data(null));
+
+  final RemoteModerationService _remoteService;
+  final ModerationService _localService;
 
   /// モデレーション実行（サーバー優先）
   Future<HybridModerationResult> moderate(String text) async {
@@ -925,10 +925,10 @@ final quickHybridCheckProvider =
 /// ハイブリッドテキスト検証Notifier（リアルタイム入力用）
 class HybridTextValidationNotifier
     extends StateNotifier<TextValidationState> {
-  final HybridModerationNotifier _moderationNotifier;
-
   HybridTextValidationNotifier(this._moderationNotifier)
       : super(TextValidationState.initial());
+
+  final HybridModerationNotifier _moderationNotifier;
 
   /// クイック検証（ローカルのみ、リアルタイム入力用）
   void validateQuick(String text) {

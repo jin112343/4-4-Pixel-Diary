@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/sanitizer.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../domain/entities/comment.dart';
 import '../timeline_view_model.dart';
@@ -271,16 +272,24 @@ class _CommentSheetState extends ConsumerState<CommentSheet> {
 
 /// コメントアイテム
 class _CommentItem extends StatelessWidget {
-  final Comment comment;
-  final VoidCallback onDelete;
-
   const _CommentItem({
     required this.comment,
     required this.onDelete,
   });
 
+  final Comment comment;
+  final VoidCallback onDelete;
+
   @override
   Widget build(BuildContext context) {
+    // XSS対策: サーバーから受け取ったデータをサニタイズ
+    final sanitizedNickname = Sanitizer.sanitizeNicknameForDisplay(
+      comment.userNickname,
+    );
+    final sanitizedContent = Sanitizer.sanitizeCommentForDisplay(
+      comment.content,
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
@@ -291,7 +300,7 @@ class _CommentItem extends StatelessWidget {
             radius: 16,
             backgroundColor: AppColors.primary.withValues(alpha: 0.2),
             child: Text(
-              comment.userNickname?.characters.first ?? '?',
+              sanitizedNickname.characters.first,
               style: const TextStyle(
                 color: AppColors.primary,
                 fontSize: 12,
@@ -309,7 +318,7 @@ class _CommentItem extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      comment.userNickname ?? '匿名',
+                      sanitizedNickname,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -327,7 +336,7 @@ class _CommentItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  comment.content,
+                  sanitizedContent,
                   style: const TextStyle(fontSize: 14),
                 ),
               ],

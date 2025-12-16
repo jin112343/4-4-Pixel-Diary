@@ -6,9 +6,6 @@ import '../../data/datasources/remote/api_client.dart';
 
 /// アプリ設定レスポンス
 class AppConfigResponse {
-  final VersionConfig version;
-  final MaintenanceConfig maintenance;
-
   const AppConfigResponse({
     required this.version,
     required this.maintenance,
@@ -21,15 +18,13 @@ class AppConfigResponse {
           MaintenanceConfig.fromJson(json['maintenance'] as Map<String, dynamic>),
     );
   }
+
+  final VersionConfig version;
+  final MaintenanceConfig maintenance;
 }
 
 /// バージョン設定
 class VersionConfig {
-  final String minVersion;
-  final String latestVersion;
-  final bool forceUpdate;
-  final StoreUrls storeUrl;
-
   const VersionConfig({
     required this.minVersion,
     required this.latestVersion,
@@ -45,13 +40,15 @@ class VersionConfig {
       storeUrl: StoreUrls.fromJson(json['storeUrl'] as Map<String, dynamic>? ?? {}),
     );
   }
+
+  final String minVersion;
+  final String latestVersion;
+  final bool forceUpdate;
+  final StoreUrls storeUrl;
 }
 
 /// ストアURL
 class StoreUrls {
-  final String ios;
-  final String android;
-
   const StoreUrls({
     required this.ios,
     required this.android,
@@ -63,14 +60,13 @@ class StoreUrls {
       android: json['android'] as String? ?? '',
     );
   }
+
+  final String ios;
+  final String android;
 }
 
 /// メンテナンス設定
 class MaintenanceConfig {
-  final bool enabled;
-  final String message;
-  final DateTime? estimatedEndTime;
-
   const MaintenanceConfig({
     required this.enabled,
     required this.message,
@@ -85,13 +81,17 @@ class MaintenanceConfig {
       estimatedEndTime: endTimeStr != null ? DateTime.tryParse(endTimeStr) : null,
     );
   }
+
+  final bool enabled;
+  final String message;
+  final DateTime? estimatedEndTime;
 }
 
 /// アプリ設定サービス
 class AppConfigService {
-  final ApiClient _apiClient;
-
   AppConfigService(this._apiClient);
+
+  final ApiClient _apiClient;
 
   /// アプリ設定を取得
   Future<AppConfigResponse?> getAppConfig({

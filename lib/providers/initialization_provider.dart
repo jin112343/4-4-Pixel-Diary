@@ -16,11 +16,11 @@ final initializationProvider =
 
 /// 初期化状態Notifier
 class InitializationNotifier extends StateNotifier<InitializationStatus> {
-  final Ref _ref;
-
   InitializationNotifier(this._ref) : super(InitializationStatus.initializing) {
     _initialize();
   }
+
+  final Ref _ref;
 
   Future<void> _initialize() async {
     try {

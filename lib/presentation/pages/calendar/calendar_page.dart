@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/color_constants.dart';
 import '../../../domain/entities/pixel_art.dart';
-import '../album/album_view_model.dart';
+import '../../../providers/app_providers.dart';
 import 'calendar_view_model.dart';
 
 /// カレンダー画面
@@ -196,16 +196,31 @@ class _CollapsibleCalendarSection extends ConsumerWidget {
 }
 
 /// 選択日のドット絵リスト
-class _SelectedDatePixelArts extends ConsumerWidget {
+class _SelectedDatePixelArts extends ConsumerStatefulWidget {
   const _SelectedDatePixelArts({required this.userId, required this.state});
 
   final String userId;
   final CalendarState state;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SelectedDatePixelArts> createState() =>
+      _SelectedDatePixelArtsState();
+}
+
+class _SelectedDatePixelArtsState
+    extends ConsumerState<_SelectedDatePixelArts> {
+  /// スワイプ開始位置
+  double? _dragStartX;
+
+  /// スワイプ閾値
+  static const double _swipeThreshold = 80.0;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dateFormat = DateFormat('yyyy年M月d日(E)', 'ja_JP');
+    final state = widget.state;
+    final userId = widget.userId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +233,7 @@ class _SelectedDatePixelArts extends ConsumerWidget {
               // 前日ボタン
               IconButton(
                 icon: const Icon(Icons.chevron_left),
-                onPressed: () => _goToPreviousDay(ref),
+                onPressed: _goToPreviousDay,
                 tooltip: '前日',
               ),
               Expanded(
@@ -263,9 +278,7 @@ class _SelectedDatePixelArts extends ConsumerWidget {
               // 翌日ボタン
               IconButton(
                 icon: const Icon(Icons.chevron_right),
-                onPressed: _canGoToNextDay()
-                    ? () => _goToNextDay(ref)
-                    : null,
+                onPressed: _canGoToNextDay() ? _goToNextDay : null,
                 tooltip: '翌日',
               ),
             ],
@@ -307,18 +320,28 @@ class _SelectedDatePixelArts extends ConsumerWidget {
 
         // コンテンツ（スワイプ対応）
         Expanded(
-          child: GestureDetector(
-            onHorizontalDragEnd: (details) {
-              if (details.primaryVelocity == null) return;
+          child: Listener(
+            onPointerDown: (event) {
+              _dragStartX = event.position.dx;
+            },
+            onPointerUp: (event) {
+              if (_dragStartX == null) return;
+
+              final dragDistance = event.position.dx - _dragStartX!;
 
               // 右スワイプ → 前日
-              if (details.primaryVelocity! > 300) {
-                _goToPreviousDay(ref);
+              if (dragDistance > _swipeThreshold) {
+                _goToPreviousDay();
               }
               // 左スワイプ → 翌日
-              else if (details.primaryVelocity! < -300 && _canGoToNextDay()) {
-                _goToNextDay(ref);
+              else if (dragDistance < -_swipeThreshold && _canGoToNextDay()) {
+                _goToNextDay();
               }
+
+              _dragStartX = null;
+            },
+            onPointerCancel: (_) {
+              _dragStartX = null;
             },
             child: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -332,15 +355,20 @@ class _SelectedDatePixelArts extends ConsumerWidget {
   }
 
   /// 前日に移動
-  void _goToPreviousDay(WidgetRef ref) {
-    final previousDay = state.selectedDate.subtract(const Duration(days: 1));
-    ref.read(calendarViewModelProvider(userId).notifier).selectDate(previousDay);
+  void _goToPreviousDay() {
+    final previousDay =
+        widget.state.selectedDate.subtract(const Duration(days: 1));
+    ref
+        .read(calendarViewModelProvider(widget.userId).notifier)
+        .selectDate(previousDay);
   }
 
   /// 翌日に移動
-  void _goToNextDay(WidgetRef ref) {
-    final nextDay = state.selectedDate.add(const Duration(days: 1));
-    ref.read(calendarViewModelProvider(userId).notifier).selectDate(nextDay);
+  void _goToNextDay() {
+    final nextDay = widget.state.selectedDate.add(const Duration(days: 1));
+    ref
+        .read(calendarViewModelProvider(widget.userId).notifier)
+        .selectDate(nextDay);
   }
 
   /// 翌日に移動可能か（未来の日付は不可）
@@ -348,9 +376,9 @@ class _SelectedDatePixelArts extends ConsumerWidget {
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
     final selectedOnly = DateTime(
-      state.selectedDate.year,
-      state.selectedDate.month,
-      state.selectedDate.day,
+      widget.state.selectedDate.year,
+      widget.state.selectedDate.month,
+      widget.state.selectedDate.day,
     );
     return selectedOnly.isBefore(todayOnly);
   }

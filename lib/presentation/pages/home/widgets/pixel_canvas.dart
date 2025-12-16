@@ -63,13 +63,16 @@ class _PixelCell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: () {
+        // キーボードを閉じてから色を設定
+        FocusScope.of(context).unfocus();
         ref.read(homeViewModelProvider.notifier).setPixelColor(
               index,
               selectedColor,
             );
       },
       onLongPress: () {
-        // 長押しで消す（白に戻す）
+        // キーボードを閉じてから消す（白に戻す）
+        FocusScope.of(context).unfocus();
         ref.read(homeViewModelProvider.notifier).setPixelColor(
               index,
               ColorConstants.defaultCanvasColor,

@@ -52,11 +52,11 @@ class AlbumState with _$AlbumState {
 
 /// アルバム画面のViewModel
 class AlbumViewModel extends StateNotifier<AlbumState> {
-  final AlbumRepository _albumRepository;
-
   AlbumViewModel(this._albumRepository) : super(const AlbumState()) {
     loadAlbum();
   }
+
+  final AlbumRepository _albumRepository;
 
   /// アルバムを読み込む
   Future<void> loadAlbum({bool refresh = false}) async {
@@ -316,9 +316,4 @@ final albumViewModelProvider =
   },
 );
 
-/// 現在のユーザーIDプロバイダー
-final currentUserIdProvider = FutureProvider<String>((ref) async {
-  final authService = ref.watch(authServiceProvider);
-  final user = await authService.initialize();
-  return user.deviceId;
-});
+// currentUserIdProvider は app_providers.dart に移動しました

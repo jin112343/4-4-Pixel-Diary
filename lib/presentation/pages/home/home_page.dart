@@ -20,49 +20,52 @@ class HomePage extends ConsumerWidget {
     // エラー・受信アート監視
     _listenToState(context, ref);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('いまのきぶん'),
-        actions: [
-          // Undoボタン
-          _UndoButton(),
-          // Redoボタン
-          _RedoButton(),
-          // クリアボタン
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _showClearConfirmation(context, ref),
-            tooltip: 'クリア',
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => context.push(AppRoutes.settings),
-          ),
-        ],
-      ),
-      body: const SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // キャンバス
-              Expanded(flex: 3, child: Center(child: PixelCanvas())),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('いまのきぶん'),
+          actions: [
+            // Undoボタン
+            _UndoButton(),
+            // Redoボタン
+            _RedoButton(),
+            // クリアボタン
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _showClearConfirmation(context, ref),
+              tooltip: 'クリア',
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () => context.push(AppRoutes.settings),
+            ),
+          ],
+        ),
+        body: const SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // キャンバス
+                Expanded(flex: 3, child: Center(child: PixelCanvas())),
 
-              SizedBox(height: 16),
+                SizedBox(height: 16),
 
-              // カラーパレット
-              ColorPalette(),
+                // カラーパレット
+                ColorPalette(),
 
-              SizedBox(height: 16),
+                SizedBox(height: 16),
 
-              // タイトル入力
-              _TitleInput(),
+                // タイトル入力
+                _TitleInput(),
 
-              SizedBox(height: 24),
+                SizedBox(height: 24),
 
-              // 交換ボタン
-              _ExchangeButton(),
-            ],
+                // 交換ボタン
+                _ExchangeButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -98,6 +101,28 @@ class HomePage extends ConsumerWidget {
             ],
           ),
         );
+      }
+
+      // エラーメッセージ表示（ネットワークエラー、サーバーエラー等）
+      if (next.errorMessage != null &&
+          previous?.errorMessage != next.errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: '閉じる',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
+          ),
+        );
+        // エラーメッセージをクリア
+        ref.read(homeViewModelProvider.notifier).clearError();
       }
 
       // 受信アート表示

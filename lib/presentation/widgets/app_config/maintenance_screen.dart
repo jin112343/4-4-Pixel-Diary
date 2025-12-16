@@ -5,14 +5,14 @@ import '../../../services/app_config/app_config_service.dart';
 
 /// メンテナンス画面
 class MaintenanceScreen extends StatelessWidget {
-  final MaintenanceConfig maintenanceConfig;
-  final VoidCallback? onRefresh;
-
   const MaintenanceScreen({
     super.key,
     required this.maintenanceConfig,
     this.onRefresh,
   });
+
+  final MaintenanceConfig maintenanceConfig;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +138,7 @@ class MaintenanceScreen extends StatelessWidget {
                 margin: const EdgeInsets.all(1),
                 decoration: BoxDecoration(
                   color: isColored
-                      ? theme.colorScheme.primary.withOpacity(0.3)
+                      ? theme.colorScheme.primary.withValues(alpha: 0.3)
                       : theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(1),
                 ),
@@ -153,12 +153,12 @@ class MaintenanceScreen extends StatelessWidget {
 
 /// メンテナンス画面のラッパー（Navigator用）
 class MaintenanceRoute extends StatelessWidget {
-  final MaintenanceConfig maintenanceConfig;
-
   const MaintenanceRoute({
     super.key,
     required this.maintenanceConfig,
   });
+
+  final MaintenanceConfig maintenanceConfig;
 
   @override
   Widget build(BuildContext context) {

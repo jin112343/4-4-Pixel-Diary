@@ -8,7 +8,6 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/color_constants.dart';
 import '../../../core/utils/content_filter.dart';
 import '../../../core/utils/logger.dart';
-import '../../../data/datasources/local/local_storage.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../domain/repositories/pixel_art_repository.dart';
 import '../../../providers/app_providers.dart';
@@ -55,17 +54,15 @@ class HomeState with _$HomeState {
 
 /// ホーム画面のViewModel
 class HomeViewModel extends StateNotifier<HomeState> {
-  final PixelArtRepository _pixelArtRepository;
-  final LocalStorage _localStorage;
-  final ModerationService _moderationService;
-
   HomeViewModel(
     this._pixelArtRepository,
-    this._localStorage,
     this._moderationService,
   ) : super(const HomeState()) {
     _initializePixels();
   }
+
+  final PixelArtRepository _pixelArtRepository;
+  final ModerationService _moderationService;
 
   /// ピクセルを初期化
   void _initializePixels() {
@@ -211,7 +208,7 @@ class HomeViewModel extends StateNotifier<HomeState> {
     try {
       // Color から int (RGB) に変換
       final pixelValues =
-          state.pixels.map((color) => color.value & 0xFFFFFF).toList();
+          state.pixels.map((color) => color.toARGB32() & 0xFFFFFF).toList();
 
       // 自分が作成したドット絵をアルバムに保存
       final myArt = PixelArt(
@@ -222,8 +219,12 @@ class HomeViewModel extends StateNotifier<HomeState> {
         source: PixelArtSource.local,
         gridSize: state.gridSize,
       );
-      await _localStorage.addToAlbum(myArt);
-      logger.i('Saved my art to album: ${myArt.id}');
+      // Repository経由でアルバムに保存（レイヤー違反を回避）
+      final saveResult = await _pixelArtRepository.saveLocal(myArt);
+      saveResult.fold(
+        (failure) => logger.w('Failed to save my art to album: ${failure.message}'),
+        (_) => logger.i('Saved my art to album: ${myArt.id}'),
+      );
 
       final result = await _pixelArtRepository.exchange(
         pixels: pixelValues,
@@ -282,7 +283,6 @@ final homeViewModelProvider =
     StateNotifierProvider<HomeViewModel, HomeState>((ref) {
   return HomeViewModel(
     ref.watch(pixelArtRepositoryProvider),
-    ref.watch(localStorageProvider),
     ref.watch(moderationServiceProvider),
   );
 });

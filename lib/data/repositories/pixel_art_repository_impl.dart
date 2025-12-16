@@ -4,6 +4,7 @@ import 'package:fpdart/fpdart.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/errors/failures.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/sanitizer.dart';
 import '../../domain/entities/pixel_art.dart';
 import '../../domain/repositories/pixel_art_repository.dart';
 import '../datasources/local/local_storage.dart';
@@ -12,14 +13,14 @@ import '../datasources/remote/api_interceptor.dart';
 
 /// ドット絵リポジトリ実装
 class PixelArtRepositoryImpl implements PixelArtRepository {
-  final ApiClient _apiClient;
-  final LocalStorage _localStorage;
-
   PixelArtRepositoryImpl({
     required ApiClient apiClient,
     required LocalStorage localStorage,
   })  : _apiClient = apiClient,
         _localStorage = localStorage;
+
+  final ApiClient _apiClient;
+  final LocalStorage _localStorage;
 
   @override
   Future<Either<Failure, PixelArt>> exchange({
@@ -28,7 +29,14 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
     required int gridSize,
   }) async {
     try {
-      // バリデーション
+      // ========== 入力バリデーション（セキュリティ強化） ==========
+
+      // グリッドサイズのバリデーション
+      if (gridSize < 4 || gridSize > 8) {
+        return const Left(ValidationFailure('グリッドサイズは4〜8の範囲で指定してください'));
+      }
+
+      // ピクセル数のバリデーション
       final expectedPixelCount = gridSize * gridSize;
       if (pixels.length != expectedPixelCount) {
         return Left(ValidationFailure(
@@ -36,7 +44,19 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
         ));
       }
 
-      if (title.length > 5) {
+      // ピクセル値のバリデーション（各ピクセルが有効なRGB値であること）
+      for (var i = 0; i < pixels.length; i++) {
+        final pixel = pixels[i];
+        if (pixel < 0 || pixel > 0xFFFFFF) {
+          return Left(ValidationFailure(
+            'ピクセル値が不正です（インデックス: $i, 値: $pixel）',
+          ));
+        }
+      }
+
+      // タイトルのバリデーションとサニタイズ
+      final sanitizedTitle = Sanitizer.sanitizeUserInput(title, maxLength: 5);
+      if (sanitizedTitle.length > 5) {
         return const Left(ValidationFailure('タイトルは5文字以内で入力してください'));
       }
 
@@ -45,7 +65,7 @@ class PixelArtRepositoryImpl implements PixelArtRepository {
         ApiConstants.exchangeEndpoint,
         data: {
           'pixels': pixels,
-          'title': title,
+          'title': sanitizedTitle,
           'gridSize': gridSize,
         },
       );

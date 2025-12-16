@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../../core/constants/color_constants.dart';
 import '../../../core/routes/app_router.dart';
-import '../../../core/utils/logger.dart';
 import '../../../domain/entities/pixel_art.dart';
 import '../../../domain/entities/post.dart';
 import '../../../providers/app_providers.dart';
@@ -188,74 +186,8 @@ class _AlbumContent extends ConsumerWidget {
 }
 
 /// 空の状態（全面広告表示）
-class _EmptyState extends StatefulWidget {
+class _EmptyState extends StatelessWidget {
   const _EmptyState();
-
-  @override
-  State<_EmptyState> createState() => _EmptyStateState();
-}
-
-class _EmptyStateState extends State<_EmptyState> {
-  NativeAd? _nativeAd;
-  bool _isAdLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAd();
-  }
-
-  @override
-  void dispose() {
-    _nativeAd?.dispose();
-    super.dispose();
-  }
-
-  void _loadAd() {
-    _nativeAd = NativeAd(
-      adUnitId: AdService.instance.nativeAdUnitId,
-      listener: NativeAdListener(
-        onAdLoaded: (ad) {
-          if (mounted) {
-            setState(() {
-              _isAdLoaded = true;
-            });
-          }
-          logger.d('Empty state native ad loaded');
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          logger.e(
-            'Empty state native ad failed to load',
-            error: error,
-          );
-        },
-      ),
-      request: const AdRequest(),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.medium,
-        mainBackgroundColor: Colors.white,
-        cornerRadius: 12,
-        callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white,
-          backgroundColor: Colors.blue,
-          style: NativeTemplateFontStyle.bold,
-          size: 14,
-        ),
-        primaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.black87,
-          style: NativeTemplateFontStyle.bold,
-          size: 16,
-        ),
-        secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.grey,
-          style: NativeTemplateFontStyle.normal,
-          size: 12,
-        ),
-      ),
-    );
-    _nativeAd!.load();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -288,15 +220,14 @@ class _EmptyStateState extends State<_EmptyState> {
             ),
             const SizedBox(height: 32),
             // 広告表示
-            if (_isAdLoaded && _nativeAd != null)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                constraints: const BoxConstraints(
-                  maxWidth: 400,
-                  maxHeight: 350,
-                ),
-                child: AdWidget(ad: _nativeAd!),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              constraints: const BoxConstraints(
+                maxWidth: 400,
+                maxHeight: 350,
               ),
+              child: AdService.instance.buildNativeAd(height: 280),
+            ),
           ],
         ),
       ),
@@ -424,101 +355,14 @@ class _AlbumGrid extends ConsumerWidget {
 }
 
 /// ネイティブ広告アイテム
-class _NativeAdItem extends StatefulWidget {
+class _NativeAdItem extends StatelessWidget {
   const _NativeAdItem({super.key});
-
-  @override
-  State<_NativeAdItem> createState() => _NativeAdItemState();
-}
-
-class _NativeAdItemState extends State<_NativeAdItem> {
-  NativeAd? _nativeAd;
-  bool _isAdLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAd();
-  }
-
-  @override
-  void dispose() {
-    _nativeAd?.dispose();
-    super.dispose();
-  }
-
-  void _loadAd() {
-    _nativeAd = NativeAd(
-      adUnitId: AdService.instance.nativeAdUnitId,
-      listener: NativeAdListener(
-        onAdLoaded: (ad) {
-          if (mounted) {
-            setState(() {
-              _isAdLoaded = true;
-            });
-          }
-          logger.d('Grid native ad loaded');
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          logger.e('Grid native ad failed to load', error: error);
-        },
-      ),
-      request: const AdRequest(),
-      nativeTemplateStyle: NativeTemplateStyle(
-        templateType: TemplateType.small,
-        mainBackgroundColor: Colors.white,
-        cornerRadius: 8,
-        callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.white,
-          backgroundColor: Colors.blue,
-          style: NativeTemplateFontStyle.bold,
-          size: 12,
-        ),
-        primaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.black87,
-          style: NativeTemplateFontStyle.bold,
-          size: 12,
-        ),
-        secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: Colors.grey,
-          style: NativeTemplateFontStyle.normal,
-          size: 10,
-        ),
-      ),
-    );
-    _nativeAd!.load();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: _isAdLoaded && _nativeAd != null
-          ? AdWidget(ad: _nativeAd!)
-          : Container(
-              color: Colors.grey[100],
-              child: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.ad_units,
-                      color: Colors.grey,
-                      size: 24,
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      '広告',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+      child: AdService.instance.buildNativeAd(height: 180),
     );
   }
 }

@@ -49,11 +49,11 @@ class SentAlbumState with _$SentAlbumState {
 
 /// おくったアルバム画面のViewModel
 class SentAlbumViewModel extends StateNotifier<SentAlbumState> {
-  final AlbumRepository _albumRepository;
-
   SentAlbumViewModel(this._albumRepository) : super(const SentAlbumState()) {
     loadAlbum();
   }
+
+  final AlbumRepository _albumRepository;
 
   /// アルバムを読み込む
   Future<void> loadAlbum({bool refresh = false}) async {

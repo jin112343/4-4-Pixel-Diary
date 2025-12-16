@@ -47,11 +47,11 @@ class TimelineState with _$TimelineState {
 
 /// タイムライン画面のViewModel
 class TimelineViewModel extends StateNotifier<TimelineState> {
-  final PostRepository _postRepository;
-
   TimelineViewModel(this._postRepository) : super(const TimelineState()) {
     loadTimeline();
   }
+
+  final PostRepository _postRepository;
 
   /// タイムラインを読み込む
   Future<void> loadTimeline({bool refresh = false}) async {

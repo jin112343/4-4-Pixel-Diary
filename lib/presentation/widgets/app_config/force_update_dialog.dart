@@ -7,14 +7,14 @@ import '../../../services/app_config/app_config_service.dart';
 
 /// 強制アップデートダイアログ
 class ForceUpdateDialog extends StatelessWidget {
-  final VersionConfig versionConfig;
-  final VoidCallback? onLater;
-
   const ForceUpdateDialog({
     super.key,
     required this.versionConfig,
     this.onLater,
   });
+
+  final VersionConfig versionConfig;
+  final VoidCallback? onLater;
 
   /// ダイアログを表示
   static Future<void> show(

@@ -10,6 +10,10 @@
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 
+# Play Core関連（デファードコンポーネント用）
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
+
 # JSON Serialization (freezed/json_serializable)
 -keepattributes *Annotation*
 -keepclassmembers class * {

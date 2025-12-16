@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/sanitizer.dart';
 import '../../../../domain/entities/post.dart';
 import 'pixel_art_display.dart';
 
 /// 投稿カードウィジェット
 class PostCard extends StatelessWidget {
-  final Post post;
-  final VoidCallback onLike;
-  final VoidCallback onReport;
-
   const PostCard({
     super.key,
     required this.post,
     required this.onLike,
     required this.onReport,
   });
+
+  final Post post;
+  final VoidCallback onLike;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +45,11 @@ class PostCard extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    // XSS対策: サーバーから受け取ったニックネームをサニタイズ
+    final sanitizedNickname = Sanitizer.sanitizeNicknameForDisplay(
+      post.ownerNickname,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 4, 8),
       child: Row(
@@ -53,7 +59,7 @@ class PostCard extends StatelessWidget {
             radius: 18,
             backgroundColor: AppColors.primary.withValues(alpha: 0.2),
             child: Text(
-              post.ownerNickname?.characters.first ?? '?',
+              sanitizedNickname.characters.first,
               style: const TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.bold,
@@ -68,7 +74,7 @@ class PostCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  post.ownerNickname ?? '匿名',
+                  sanitizedNickname,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
@@ -137,10 +143,13 @@ class PostCard extends StatelessWidget {
   }
 
   Widget _buildTitle() {
+    // XSS対策: サーバーから受け取ったタイトルをサニタイズ
+    final sanitizedTitle = Sanitizer.sanitizeTitleForDisplay(post.title);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Text(
-        post.title,
+        sanitizedTitle,
         style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
@@ -188,17 +197,17 @@ class PostCard extends StatelessWidget {
 
 /// アクションボタン
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final Color? iconColor;
-  final String label;
-  final VoidCallback onTap;
-
   const _ActionButton({
     required this.icon,
     this.iconColor,
     required this.label,
     required this.onTap,
   });
+
+  final IconData icon;
+  final Color? iconColor;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {

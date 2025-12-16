@@ -13,10 +13,6 @@ import '../datasources/remote/api_interceptor.dart';
 
 /// アルバムリポジトリ実装
 class AlbumRepositoryImpl implements AlbumRepository {
-  final ApiClient _apiClient;
-  final LocalStorage _localStorage;
-  final String _userId;
-
   AlbumRepositoryImpl({
     required ApiClient apiClient,
     required LocalStorage localStorage,
@@ -24,6 +20,10 @@ class AlbumRepositoryImpl implements AlbumRepository {
   })  : _apiClient = apiClient,
         _localStorage = localStorage,
         _userId = userId;
+
+  final ApiClient _apiClient;
+  final LocalStorage _localStorage;
+  final String _userId;
 
   @override
   Future<Either<Failure, Album>> getAlbum({

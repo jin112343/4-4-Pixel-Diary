@@ -110,8 +110,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       return {
         statusCode: 503,
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          ...CORS_HEADERS,
           'Retry-After': '3600', // 1時間後にリトライを推奨
         },
         body: JSON.stringify(response),
@@ -122,10 +121,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (requiresUpdate) {
       return {
         statusCode: 426,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: CORS_HEADERS,
         body: JSON.stringify(response),
       };
     }
@@ -156,12 +152,18 @@ function compareVersions(v1: string, v2: string): number {
   return 0;
 }
 
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, X-App-Version, X-Platform, Authorization, X-Timestamp, X-Nonce, X-Signature',
+};
+
 function successResponse(body: ApiResponse): APIGatewayProxyResult {
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      ...CORS_HEADERS,
       'Cache-Control': 'max-age=60', // 1分キャッシュ
     },
     body: JSON.stringify(body),
@@ -176,10 +178,7 @@ function errorResponse(statusCode: number, code: string, message: string): APIGa
 
   return {
     statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
+    headers: CORS_HEADERS,
     body: JSON.stringify(body),
   };
 }

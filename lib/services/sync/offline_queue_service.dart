@@ -6,14 +6,6 @@ import '../../core/utils/logger.dart';
 
 /// オフラインキューのアイテム
 class QueueItem {
-  final String id;
-  final String type;
-  final String endpoint;
-  final String method;
-  final Map<String, dynamic>? data;
-  final DateTime createdAt;
-  final int retryCount;
-
   QueueItem({
     required this.id,
     required this.type,
@@ -23,6 +15,24 @@ class QueueItem {
     required this.createdAt,
     this.retryCount = 0,
   });
+
+  factory QueueItem.fromJson(Map<String, dynamic> json) => QueueItem(
+        id: json['id'] as String,
+        type: json['type'] as String,
+        endpoint: json['endpoint'] as String,
+        method: json['method'] as String,
+        data: json['data'] as Map<String, dynamic>?,
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        retryCount: json['retryCount'] as int? ?? 0,
+      );
+
+  final String id;
+  final String type;
+  final String endpoint;
+  final String method;
+  final Map<String, dynamic>? data;
+  final DateTime createdAt;
+  final int retryCount;
 
   QueueItem copyWith({int? retryCount}) {
     return QueueItem(
@@ -45,16 +55,6 @@ class QueueItem {
         'createdAt': createdAt.toIso8601String(),
         'retryCount': retryCount,
       };
-
-  factory QueueItem.fromJson(Map<String, dynamic> json) => QueueItem(
-        id: json['id'] as String,
-        type: json['type'] as String,
-        endpoint: json['endpoint'] as String,
-        method: json['method'] as String,
-        data: json['data'] as Map<String, dynamic>?,
-        createdAt: DateTime.parse(json['createdAt'] as String),
-        retryCount: json['retryCount'] as int? ?? 0,
-      );
 }
 
 /// キューの種類

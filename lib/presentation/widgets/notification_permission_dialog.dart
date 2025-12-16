@@ -193,10 +193,12 @@ class _NotificationPermissionDialogState
           FilledButton(
             onPressed: () async {
               final notificationService = ref.read(notificationServiceProvider);
+              final dialogNavigator = Navigator.of(context);
+              final parentNavigator = Navigator.of(this.context);
               await notificationService.openNotificationSettings();
               if (mounted) {
-                Navigator.of(context).pop();
-                Navigator.of(this.context).pop(false);
+                dialogNavigator.pop();
+                parentNavigator.pop(false);
               }
             },
             child: const Text('設定を開く'),

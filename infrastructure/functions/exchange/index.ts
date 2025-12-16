@@ -190,13 +190,17 @@ async function findMatchingArt(excludeUserId: string, excludeArtId: string): Pro
   return result.Items[randomIndex] as PixelArt;
 }
 
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, Authorization, X-Timestamp, X-Nonce, X-Signature',
+};
+
 function successResponse(body: ApiResponse): APIGatewayProxyResult {
   return {
     statusCode: 200,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
+    headers: CORS_HEADERS,
     body: JSON.stringify(body),
   };
 }
@@ -209,10 +213,7 @@ function errorResponse(statusCode: number, code: string, message: string): APIGa
 
   return {
     statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-    },
+    headers: CORS_HEADERS,
     body: JSON.stringify(body),
   };
 }

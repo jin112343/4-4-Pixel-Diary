@@ -535,8 +535,8 @@ class TextNormalizer {
     };
 
     var result = text;
-    numberMap.forEach((num, char) {
-      result = result.replaceAll(num, char);
+    numberMap.forEach((numKey, char) {
+      result = result.replaceAll(numKey, char);
     });
     return result;
   }

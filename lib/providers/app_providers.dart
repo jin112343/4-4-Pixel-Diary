@@ -153,3 +153,10 @@ class ExchangeCountNotifier extends StateNotifier<int> {
   /// 広告を表示すべきかどうか（3回に1回）
   bool get shouldShowAd => state > 0 && state % 3 == 0;
 }
+
+/// 現在のユーザーIDプロバイダー
+final currentUserIdProvider = FutureProvider<String>((ref) async {
+  final authService = ref.watch(authServiceProvider);
+  final user = await authService.initialize();
+  return user.deviceId;
+});

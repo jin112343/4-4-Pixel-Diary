@@ -241,12 +241,6 @@ enum MatchType {
 
 /// コンテンツ違反情報
 class ContentViolation {
-  final String originalWord;
-  final String matchedWord;
-  final NgWordCategory category;
-  final int severity;
-  final MatchType matchType;
-
   const ContentViolation({
     required this.originalWord,
     required this.matchedWord,
@@ -254,6 +248,12 @@ class ContentViolation {
     required this.severity,
     required this.matchType,
   });
+
+  final String originalWord;
+  final String matchedWord;
+  final NgWordCategory category;
+  final int severity;
+  final MatchType matchType;
 
   @override
   String toString() {
@@ -266,10 +266,6 @@ class ContentViolation {
 
 /// コンテンツチェック結果
 class ContentCheckResult {
-  final String originalText;
-  final List<ContentViolation> violations;
-  final DateTime checkedAt;
-
   const ContentCheckResult({
     required this.originalText,
     required this.violations,
@@ -284,6 +280,10 @@ class ContentCheckResult {
       checkedAt: DateTime.now(),
     );
   }
+
+  final String originalText;
+  final List<ContentViolation> violations;
+  final DateTime checkedAt;
 
   /// 違反があるか
   bool get isClean => violations.isEmpty;
@@ -313,15 +313,15 @@ class ContentCheckResult {
 
 /// フィルタ統計
 class FilterStats {
-  final FilterStrictness strictness;
-  final bool localCheckOnly;
-  final bool serverModerationEnabled;
-
   const FilterStats({
     required this.strictness,
     required this.localCheckOnly,
     required this.serverModerationEnabled,
   });
+
+  final FilterStrictness strictness;
+  final bool localCheckOnly;
+  final bool serverModerationEnabled;
 
   @override
   String toString() {

@@ -4,16 +4,14 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/logger.dart';
 import 'api_interceptor.dart';
+import 'certificate_pinner.dart';
+import 'request_signer.dart';
 
 /// APIクライアント
 class ApiClient {
-  late final Dio _dio;
-  late final AuthInterceptor _authInterceptor;
-  final void Function()? onRequestStart;
-  final void Function()? onRequestEnd;
-
   ApiClient({
     String? deviceId,
+    String? signingKey,
     this.onRequestStart,
     this.onRequestEnd,
   }) {
@@ -32,10 +30,22 @@ class ApiClient {
       ),
     );
 
+    // 証明書ピンニングを設定
+    CertificatePinner.configureDio(_dio);
+
     _authInterceptor = AuthInterceptor(deviceId: deviceId);
+
+    // 署名インターセプター（signingKeyが提供された場合のみ有効）
+    final requestSignerInterceptor = signingKey != null
+        ? RequestSignerInterceptor(signingKey: signingKey)
+        : null;
 
     _dio.interceptors.addAll([
       _authInterceptor,
+      // 署名インターセプターは認証ヘッダー追加後、リクエスト送信前に実行
+      if (requestSignerInterceptor != null) requestSignerInterceptor,
+      // 証明書ピンニングインターセプター（ホスト検証用）
+      CertificatePinner.createInterceptor(),
       LoadingInterceptor(
         onRequestStart: onRequestStart,
         onRequestEnd: onRequestEnd,
@@ -44,6 +54,11 @@ class ApiClient {
       RetryInterceptor(dio: _dio),
     ]);
   }
+
+  late final Dio _dio;
+  late final AuthInterceptor _authInterceptor;
+  final void Function()? onRequestStart;
+  final void Function()? onRequestEnd;
 
   /// デバイスIDを設定
   void setDeviceId(String? deviceId) {
@@ -117,14 +132,14 @@ class ApiClient {
 
 /// ローディングインターセプター
 class LoadingInterceptor extends Interceptor {
-  final void Function()? onRequestStart;
-  final void Function()? onRequestEnd;
-  int _requestCount = 0;
-
   LoadingInterceptor({
     this.onRequestStart,
     this.onRequestEnd,
   });
+
+  final void Function()? onRequestStart;
+  final void Function()? onRequestEnd;
+  int _requestCount = 0;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -173,6 +188,7 @@ class LoggingInterceptor extends Interceptor {
     logger.e(
       'API Error: ${err.response?.statusCode} ${err.requestOptions.path}',
       error: err,
+      stackTrace: err.stackTrace,
     );
     handler.next(err);
   }
@@ -180,13 +196,13 @@ class LoggingInterceptor extends Interceptor {
 
 /// リトライインターセプター
 class RetryInterceptor extends Interceptor {
-  final Dio dio;
-  final int maxRetries;
-
   RetryInterceptor({
     required this.dio,
     this.maxRetries = 3,
   });
+
+  final Dio dio;
+  final int maxRetries;
 
   @override
   Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
@@ -202,8 +218,13 @@ class RetryInterceptor extends Interceptor {
         final response = await dio.fetch<dynamic>(options);
         handler.resolve(response);
         return;
-      } catch (e) {
-        // リトライ失敗、次のエラーハンドラへ
+      } catch (e, stackTrace) {
+        // リトライ失敗をログに記録
+        logger.w(
+          'Retry ${retryCount + 1}/$maxRetries failed: ${options.path}',
+          error: e,
+          stackTrace: stackTrace,
+        );
       }
     }
 

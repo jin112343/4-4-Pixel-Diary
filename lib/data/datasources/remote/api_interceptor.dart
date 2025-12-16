@@ -1,14 +1,33 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/utils/logger.dart';
 
+/// トークンリフレッシュコールバック
+typedef TokenRefreshCallback = Future<String?> Function(String? refreshToken);
+
 /// 認証インターセプター
 class AuthInterceptor extends Interceptor {
+  AuthInterceptor({
+    String? deviceId,
+    this.onTokenRefresh,
+    this.onTokenExpired,
+  }) : _deviceId = deviceId;
+
   String? _deviceId;
   String? _accessToken;
+  String? _refreshToken;
 
-  AuthInterceptor({String? deviceId}) : _deviceId = deviceId;
+  /// トークンリフレッシュ時に呼ばれるコールバック
+  final TokenRefreshCallback? onTokenRefresh;
+
+  /// トークン期限切れ時（リフレッシュ失敗含む）に呼ばれるコールバック
+  final VoidCallback? onTokenExpired;
+
+  // リフレッシュ中フラグ（重複リフレッシュ防止）
+  bool _isRefreshing = false;
+  Completer<String?>? _refreshCompleter;
 
   /// デバイスIDを設定
   void setDeviceId(String? id) {
@@ -18,6 +37,11 @@ class AuthInterceptor extends Interceptor {
   /// アクセストークンを設定
   void setAccessToken(String? token) {
     _accessToken = token;
+  }
+
+  /// リフレッシュトークンを設定
+  void setRefreshToken(String? token) {
+    _refreshToken = token;
   }
 
   @override
@@ -33,29 +57,92 @@ class AuthInterceptor extends Interceptor {
     }
 
     // タイムスタンプを追加（リプレイ攻撃防止）
-    options.headers['X-Timestamp'] = DateTime.now().millisecondsSinceEpoch.toString();
+    // 注意: RequestSignerInterceptorでも追加されるため、署名用は別途設定
+    options.headers['X-Request-Time'] = DateTime.now().millisecondsSinceEpoch.toString();
 
     handler.next(options);
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
-    // 401エラーの場合、トークンをクリア
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    // 401エラーの場合、トークンリフレッシュを試行
     if (err.response?.statusCode == 401) {
+      // リフレッシュトークンがある場合のみ自動リフレッシュ
+      if (_refreshToken != null && onTokenRefresh != null) {
+        try {
+          final newToken = await _refreshAccessToken();
+
+          if (newToken != null) {
+            // 新しいトークンでリクエストを再試行
+            final options = err.requestOptions;
+            options.headers[ApiConstants.authorizationHeader] = 'Bearer $newToken';
+
+            logger.i('Retrying request with refreshed token');
+            final response = await Dio().fetch<dynamic>(options);
+            handler.resolve(response);
+            return;
+          }
+        } catch (e, stackTrace) {
+          logger.e(
+            'Token refresh failed',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+
+      // リフレッシュ失敗またはリフレッシュトークンなし
       _accessToken = null;
+      _refreshToken = null;
       logger.w('Access token cleared due to 401 error');
+      onTokenExpired?.call();
     }
 
     handler.next(err);
   }
+
+  /// アクセストークンをリフレッシュ
+  Future<String?> _refreshAccessToken() async {
+    // 既にリフレッシュ中の場合は完了を待つ
+    if (_isRefreshing) {
+      logger.d('Token refresh already in progress, waiting...');
+      return _refreshCompleter?.future;
+    }
+
+    _isRefreshing = true;
+    _refreshCompleter = Completer<String?>();
+
+    try {
+      logger.i('Starting token refresh');
+      final newToken = await onTokenRefresh?.call(_refreshToken);
+
+      if (newToken != null) {
+        _accessToken = newToken;
+        logger.i('Token refresh successful');
+      } else {
+        logger.w('Token refresh returned null');
+      }
+
+      _refreshCompleter?.complete(newToken);
+      return newToken;
+    } catch (e) {
+      _refreshCompleter?.completeError(e);
+      rethrow;
+    } finally {
+      _isRefreshing = false;
+      _refreshCompleter = null;
+    }
+  }
 }
+
+/// コールバック型定義
+typedef VoidCallback = void Function();
 
 /// エラーレスポンスのパース
 class ApiError {
-  final String message;
-  final String? code;
-  final int? statusCode;
-
   ApiError({
     required this.message,
     this.code,
@@ -100,6 +187,10 @@ class ApiError {
         );
     }
   }
+
+  final String message;
+  final String? code;
+  final int? statusCode;
 
   @override
   String toString() => 'ApiError: $message (code: $code, status: $statusCode)';

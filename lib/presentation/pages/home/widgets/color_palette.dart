@@ -59,6 +59,8 @@ class ColorPalette extends ConsumerWidget {
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
                   onTap: () {
+                    // キーボードを閉じてから色を選択
+                    FocusScope.of(context).unfocus();
                     ref.read(homeViewModelProvider.notifier).selectColor(color);
                   },
                   child: Container(
@@ -88,6 +90,8 @@ class ColorPalette extends ConsumerWidget {
     WidgetRef ref,
     Color currentColor,
   ) {
+    // キーボードを閉じてからダイアログを表示
+    FocusScope.of(context).unfocus();
     showDialog<void>(
       context: context,
       builder: (context) => _ColorPickerDialog(

@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_app_badger/flutter_app_badger.dart';
+// flutter_app_badger は AGP 8.0+ 非対応のため一時無効化
+// import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -27,17 +28,17 @@ class NotificationTopic {
 
 /// 通知データ
 class NotificationData {
-  final String? title;
-  final String? body;
-  final Map<String, dynamic>? data;
-  final DateTime receivedAt;
-
   NotificationData({
     this.title,
     this.body,
     this.data,
     required this.receivedAt,
   });
+
+  final String? title;
+  final String? body;
+  final Map<String, dynamic>? data;
+  final DateTime receivedAt;
 }
 
 /// 通知権限の状態
@@ -487,41 +488,17 @@ class NotificationService {
   }
 
   /// バッジを更新
+  /// NOTE: flutter_app_badger は AGP 8.0+ 非対応のため一時無効化
   Future<void> _updateBadge() async {
-    try {
-      // バッジがサポートされているか確認
-      final isSupported = await FlutterAppBadger.isAppBadgeSupported();
-      if (!isSupported) {
-        logger.w('App badge is not supported on this device');
-        return;
-      }
-
-      await FlutterAppBadger.updateBadgeCount(_unreadCount);
-      logger.d('Badge updated: $_unreadCount');
-    } catch (e, stackTrace) {
-      logger.e(
-        '_updateBadge failed',
-        error: e,
-        stackTrace: stackTrace,
-      );
-    }
+    // TODO: AGP 8.0+ 対応のバッジパッケージに置き換え後、有効化
+    logger.d('Badge update skipped (flutter_app_badger disabled): $_unreadCount');
   }
 
   /// バッジを削除
+  /// NOTE: flutter_app_badger は AGP 8.0+ 非対応のため一時無効化
   Future<void> _removeBadge() async {
-    try {
-      final isSupported = await FlutterAppBadger.isAppBadgeSupported();
-      if (!isSupported) return;
-
-      await FlutterAppBadger.removeBadge();
-      logger.d('Badge removed');
-    } catch (e, stackTrace) {
-      logger.e(
-        '_removeBadge failed',
-        error: e,
-        stackTrace: stackTrace,
-      );
-    }
+    // TODO: AGP 8.0+ 対応のバッジパッケージに置き換え後、有効化
+    logger.d('Badge remove skipped (flutter_app_badger disabled)');
   }
 
   // ========== トピック管理 ==========
@@ -617,6 +594,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
   if (kDebugMode) {
-    debugPrint('Background message: ${message.messageId}');
+    // バックグラウンドハンドラーではloggerインスタンスが利用できない場合があるため
+    // デバッグモードでのみ標準出力を使用（本番では出力されない）
+    // ignore: avoid_print
+    print('Background message: ${message.messageId}');
   }
 }

@@ -4,6 +4,7 @@ import 'package:fpdart/fpdart.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/errors/failures.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/sanitizer.dart';
 import '../../domain/entities/comment.dart';
 import '../../domain/entities/post.dart';
 import '../../domain/repositories/post_repository.dart';
@@ -12,11 +13,11 @@ import '../datasources/remote/api_interceptor.dart';
 
 /// 投稿リポジトリ実装
 class PostRepositoryImpl implements PostRepository {
-  final ApiClient _apiClient;
-
   PostRepositoryImpl({
     required ApiClient apiClient,
   }) : _apiClient = apiClient;
+
+  final ApiClient _apiClient;
 
   @override
   Future<Either<Failure, List<Post>>> getTimeline({
@@ -119,14 +120,50 @@ class PostRepositoryImpl implements PostRepository {
     required PostVisibility visibility,
   }) async {
     try {
+      // ========== 入力バリデーション（セキュリティ強化） ==========
+
+      // pixelArtIdのバリデーション（UUID形式のチェック）
+      if (pixelArtId.isEmpty || pixelArtId.length > 100) {
+        return const Left(ValidationFailure('無効なピクセルアートIDです'));
+      }
+
+      // グリッドサイズのバリデーション
+      if (gridSize < 4 || gridSize > 8) {
+        return const Left(ValidationFailure('グリッドサイズは4〜8の範囲で指定してください'));
+      }
+
+      // ピクセル数のバリデーション
+      final expectedPixelCount = gridSize * gridSize;
+      if (pixels.length != expectedPixelCount) {
+        return Left(ValidationFailure(
+          'ピクセル数が不正です（期待: $expectedPixelCount, 実際: ${pixels.length}）',
+        ));
+      }
+
+      // ピクセル値のバリデーション
+      for (final pixel in pixels) {
+        if (pixel < 0 || pixel > 0xFFFFFF) {
+          return const Left(ValidationFailure('ピクセル値が不正です'));
+        }
+      }
+
+      // タイトルのサニタイズ
+      final sanitizedTitle = Sanitizer.sanitizeUserInput(title, maxLength: 5);
+
+      // ニックネームのサニタイズ
+      final sanitizedNickname = nickname != null && nickname.isNotEmpty
+          ? Sanitizer.sanitizeUserInput(nickname, maxLength: 5)
+          : null;
+
       final response = await _apiClient.post<Map<String, dynamic>>(
         ApiConstants.postsEndpoint,
         data: {
           'pixelArtId': pixelArtId,
           'pixels': pixels,
-          'title': title,
+          'title': sanitizedTitle,
           'gridSize': gridSize,
-          if (nickname != null && nickname.isNotEmpty) 'nickname': nickname,
+          if (sanitizedNickname != null && sanitizedNickname.isNotEmpty)
+            'nickname': sanitizedNickname,
           'visibility': visibility == PostVisibility.public
               ? 'public'
               : 'private',
@@ -216,9 +253,23 @@ class PostRepositoryImpl implements PostRepository {
     required String reason,
   }) async {
     try {
+      // ========== 入力バリデーション ==========
+
+      // postIdのバリデーション
+      if (postId.isEmpty || postId.length > 100) {
+        return const Left(ValidationFailure('無効な投稿IDです'));
+      }
+
+      // 理由のバリデーションとサニタイズ
+      if (reason.isEmpty) {
+        return const Left(ValidationFailure('通報理由を入力してください'));
+      }
+
+      final sanitizedReason = Sanitizer.sanitizeUserInput(reason, maxLength: 200);
+
       await _apiClient.post<void>(
         '${ApiConstants.postsEndpoint}/$postId/report',
-        data: {'reason': reason},
+        data: {'reason': sanitizedReason},
       );
       logger.i('Post reported: $postId');
       return const Right(null);
@@ -263,9 +314,32 @@ class PostRepositoryImpl implements PostRepository {
     required String content,
   }) async {
     try {
+      // ========== 入力バリデーション（セキュリティ強化） ==========
+
+      // postIdのバリデーション
+      if (postId.isEmpty || postId.length > 100) {
+        return const Left(ValidationFailure('無効な投稿IDです'));
+      }
+
+      // コンテンツのバリデーション
+      if (content.isEmpty) {
+        return const Left(ValidationFailure('コメントを入力してください'));
+      }
+
+      // コンテンツのサニタイズ（50文字制限）
+      final sanitizedContent = Sanitizer.sanitizeUserInput(content, maxLength: 50);
+
+      if (sanitizedContent.isEmpty) {
+        return const Left(ValidationFailure('有効なコメントを入力してください'));
+      }
+
+      if (sanitizedContent.length > 50) {
+        return const Left(ValidationFailure('コメントは50文字以内で入力してください'));
+      }
+
       final response = await _apiClient.post<Map<String, dynamic>>(
         '${ApiConstants.postsEndpoint}/$postId/comments',
-        data: {'content': content},
+        data: {'content': sanitizedContent},
       );
       final data = response.data;
       if (data == null) {

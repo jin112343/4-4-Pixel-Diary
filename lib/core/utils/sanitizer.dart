@@ -1,4 +1,8 @@
 /// 入力サニタイズユーティリティ
+///
+/// セキュリティ対策として、以下の2種類のサニタイズを提供:
+/// 1. 入力時サニタイズ: ユーザー入力をサーバーに送信する前に適用
+/// 2. 表示時サニタイズ: サーバーから受け取ったデータを表示する前に適用
 class Sanitizer {
   Sanitizer._();
 
@@ -102,19 +106,146 @@ class Sanitizer {
       '',
     );
   }
+
+  // ============================================================
+  // 表示時サニタイズ（XSS対策）
+  // ============================================================
+
+  /// 表示用にサニタイズ（他ユーザーのコンテンツを表示する際に使用）
+  ///
+  /// - HTMLタグを除去
+  /// - 制御文字を除去
+  /// - 危険なURLスキームをブロック
+  /// - 絵文字は許可
+  static String sanitizeForDisplay(String input) {
+    if (input.isEmpty) return input;
+
+    var result = input;
+
+    // HTMLタグを除去
+    result = stripHtml(result);
+
+    // 制御文字を除去（絵文字は保持）
+    result = stripControlCharacters(result);
+
+    // 危険なURLスキームを無効化
+    result = neutralizeDangerousUrls(result);
+
+    return result;
+  }
+
+  /// ニックネーム表示用サニタイズ
+  static String sanitizeNicknameForDisplay(String? input) {
+    if (input == null || input.isEmpty) {
+      return '匿名';
+    }
+
+    var result = sanitizeForDisplay(input);
+
+    // 長すぎる場合は切り詰め
+    if (result.length > 10) {
+      result = '${result.substring(0, 10)}…';
+    }
+
+    return result.isEmpty ? '匿名' : result;
+  }
+
+  /// コメント表示用サニタイズ
+  static String sanitizeCommentForDisplay(String input) {
+    if (input.isEmpty) return input;
+
+    var result = sanitizeForDisplay(input);
+
+    // 連続する改行を制限
+    result = result.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+    return result;
+  }
+
+  /// タイトル表示用サニタイズ
+  static String sanitizeTitleForDisplay(String input) {
+    if (input.isEmpty) return input;
+
+    var result = sanitizeForDisplay(input);
+
+    // 改行を除去（タイトルは1行）
+    result = result.replaceAll(RegExp(r'[\r\n]'), ' ');
+
+    // 空白を正規化
+    result = normalizeWhitespace(result);
+
+    return result;
+  }
+
+  /// 危険なURLスキームを無効化
+  ///
+  /// javascript:, data:, vbscript: などの危険なスキームを検出して無効化
+  static String neutralizeDangerousUrls(String input) {
+    // 危険なURLスキームのパターン
+    final dangerousSchemes = RegExp(
+      r'(javascript|vbscript|data|file|about|blob):\s*',
+      caseSensitive: false,
+    );
+
+    return input.replaceAllMapped(dangerousSchemes, (match) {
+      // スキームを無効化（表示はするが機能しない）
+      return '[blocked]:';
+    });
+  }
+
+  /// URLが安全かどうかをチェック
+  static bool isUrlSafe(String url) {
+    if (url.isEmpty) return false;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+
+    // 許可されるスキーム
+    const allowedSchemes = ['http', 'https', 'mailto'];
+
+    return allowedSchemes.contains(uri.scheme.toLowerCase());
+  }
+
+  /// URLをサニタイズして安全な形式に変換
+  static String? sanitizeUrl(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return null;
+
+    // 危険なスキームのチェック
+    final dangerousSchemes = ['javascript:', 'vbscript:', 'data:', 'file:', 'about:', 'blob:'];
+    final lowerInput = trimmed.toLowerCase();
+
+    for (final scheme in dangerousSchemes) {
+      if (lowerInput.startsWith(scheme)) {
+        return null;
+      }
+    }
+
+    // スキームがない場合はhttpsを付与
+    if (!trimmed.contains('://')) {
+      return 'https://$trimmed';
+    }
+
+    // http/httpsのみ許可
+    if (!lowerInput.startsWith('http://') && !lowerInput.startsWith('https://')) {
+      return null;
+    }
+
+    return trimmed;
+  }
 }
 
 /// サニタイズ結果
 class SanitizeResult {
-  final String sanitized;
-  final bool wasModified;
-  final List<String> modifications;
-
   const SanitizeResult({
     required this.sanitized,
     required this.wasModified,
     this.modifications = const [],
   });
+
+  final String sanitized;
+  final bool wasModified;
+  final List<String> modifications;
 }
 
 /// 詳細なサニタイズ（変更を追跡）

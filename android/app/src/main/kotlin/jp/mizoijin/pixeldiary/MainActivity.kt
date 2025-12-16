@@ -1,4 +1,4 @@
-package com.example.pixeldiary
+package jp.mizoijin.pixeldiary
 
 import io.flutter.embedding.android.FlutterActivity
 

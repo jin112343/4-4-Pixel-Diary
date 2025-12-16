@@ -1,7 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/utils/logger.dart';
@@ -11,15 +12,25 @@ class CertificatePinner {
   CertificatePinner._();
 
   // 本番環境のAPI証明書フィンガープリント（SHA-256）
-  // 注意: 実際の運用では証明書を取得してフィンガープリントを設定する
+  // 注意: 実際の運用では以下のコマンドで取得:
+  // openssl s_client -connect api.pixeldiary.app:443 < /dev/null 2>/dev/null | \
+  //   openssl x509 -outform DER | openssl sha256 -binary | xxd -p | \
+  //   sed 's/../&:/g; s/:$//' | tr '[:lower:]' '[:upper:]'
+  //
+  // AWS API Gatewayの場合、証明書はAWSが管理するため
+  // 証明書ローテーションに注意が必要
   static const List<String> _pinnedCertificateFingerprints = [
-    // 例: 'XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX:XX'
+    // 本番環境: api.pixeldiary.app の証明書フィンガープリント
+    // ここに実際の値を設定（例: 'A1:B2:C3:...'）
+    // 複数の証明書を許可することでローテーション対応
   ];
 
   // 許可されたホスト
   static const List<String> _allowedHosts = [
     'api.pixeldiary.app',
     'dev-api.pixeldiary.app',
+    // AWS API Gateway
+    '7myvq0fjwe.execute-api.ap-northeast-1.amazonaws.com',
   ];
 
   /// Dioに証明書ピンニングを設定
@@ -47,11 +58,13 @@ class CertificatePinner {
     String host,
     int port,
   ) {
-    // 開発環境では証明書検証をスキップ（本番では必ずfalseを返す）
-    const isDevelopment = bool.fromEnvironment('dart.vm.product') == false;
-
-    if (isDevelopment) {
-      logger.w('Certificate validation skipped in development mode');
+    // デバッグモード判定（kDebugModeを使用）
+    // 注意: 開発環境でも証明書検証を有効にすることを推奨
+    if (kDebugMode && _allowSkipInDebugMode) {
+      logger.w(
+        'Certificate validation skipped in debug mode for $host. '
+        'Set _allowSkipInDebugMode=false for stricter security.',
+      );
       return true;
     }
 
@@ -61,8 +74,17 @@ class CertificatePinner {
       return false;
     }
 
-    // フィンガープリントが設定されていない場合はデフォルト検証
+    // フィンガープリントが設定されていない場合
+    // 本番環境ではデフォルトのOS検証に任せる（falseを返すと接続拒否）
+    // AWS API Gatewayの場合、証明書は信頼されたCAから発行されるため
+    // フィンガープリントなしでもOS標準検証は有効
     if (_pinnedCertificateFingerprints.isEmpty) {
+      logger.w(
+        'Certificate pinning fingerprints not configured for $host. '
+        'Using OS default validation.',
+      );
+      // falseを返すとbadCertificateとして接続拒否
+      // 証明書自体が有効な場合、このコールバックは呼ばれない
       return false;
     }
 
@@ -71,25 +93,33 @@ class CertificatePinner {
     final isValid = _pinnedCertificateFingerprints.contains(fingerprint);
 
     if (!isValid) {
-      logger.e('Certificate pinning failed: fingerprint mismatch for $host');
+      logger.e(
+        'Certificate pinning failed for $host. '
+        'Expected one of: $_pinnedCertificateFingerprints, '
+        'Got: $fingerprint',
+      );
+    } else {
+      logger.d('Certificate pinning succeeded for $host');
     }
 
     return isValid;
   }
 
+  // デバッグモードで証明書検証をスキップするかどうか
+  // セキュリティテスト時はfalseに設定
+  static const bool _allowSkipInDebugMode = true;
+
   /// 証明書のSHA-256フィンガープリントを取得
   static String _getCertificateFingerprint(X509Certificate cert) {
-    // DER形式の証明書データからフィンガープリントを計算
-    // 実際の実装では crypto パッケージを使用
+    // DER形式の証明書データからSHA-256ハッシュを計算
     final der = cert.der;
+    final digest = sha256.convert(der);
 
-    // 簡易的なフィンガープリント生成（本番では適切なハッシュ関数を使用）
-    final bytes = der;
+    // XX:XX:XX:... 形式のフィンガープリント文字列を生成
     final buffer = StringBuffer();
-
-    for (var i = 0; i < bytes.length && i < 32; i++) {
+    for (var i = 0; i < digest.bytes.length; i++) {
       if (i > 0) buffer.write(':');
-      buffer.write(bytes[i].toRadixString(16).padLeft(2, '0').toUpperCase());
+      buffer.write(digest.bytes[i].toRadixString(16).padLeft(2, '0').toUpperCase());
     }
 
     return buffer.toString();

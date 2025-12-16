@@ -12,6 +12,12 @@ import '../../core/utils/logger.dart';
 /// 3. AI/ML分析をサーバーで実行可能
 /// 4. ユーザーがローカルフィルタを回避できない
 class RemoteModerationService {
+  RemoteModerationService({
+    Dio? dio,
+    String? baseUrl,
+  })  : _dio = dio ?? Dio(),
+        _baseUrl = baseUrl ?? ApiConstants.baseUrl;
+
   final Dio _dio;
   final String _baseUrl;
 
@@ -22,12 +28,6 @@ class RemoteModerationService {
 
   /// タイムアウト設定
   static const Duration _timeout = Duration(seconds: 5);
-
-  RemoteModerationService({
-    Dio? dio,
-    String? baseUrl,
-  })  : _dio = dio ?? Dio(),
-        _baseUrl = baseUrl ?? ApiConstants.baseUrl;
 
   // ============================================================
   // メインAPI呼び出し
@@ -67,11 +67,11 @@ class RemoteModerationService {
       final result = RemoteModerationResult.fromJson(response.data!);
       _addToCache(cacheKey, result);
       return result;
-    } on DioException catch (e) {
+    } on DioException catch (e, stackTrace) {
       logger.e(
         'RemoteModerationService: API呼び出し失敗',
-        error: e.message,
-        stackTrace: e.stackTrace,
+        error: e,
+        stackTrace: stackTrace,
       );
 
       // APIエラー時はフォールバック結果を返す
@@ -117,8 +117,12 @@ class RemoteModerationService {
           .toList();
 
       return results;
-    } catch (e) {
-      logger.e('RemoteModerationService: バッチチェック失敗', error: e);
+    } catch (e, stackTrace) {
+      logger.e(
+        'RemoteModerationService: バッチチェック失敗',
+        error: e,
+        stackTrace: stackTrace,
+      );
       // エラー時は各テキストを個別にチェック
       return Future.wait(texts.map((t) => check(t)));
     }
@@ -203,36 +207,6 @@ class RemoteModerationService {
 
 /// リモートモデレーション結果
 class RemoteModerationResult {
-  /// テキストがクリーンか
-  final bool isClean;
-
-  /// ブロックすべきか
-  final bool shouldBlock;
-
-  /// 検出されたカテゴリ
-  final List<String> detectedCategories;
-
-  /// 検出されたNGワード（マスク済み）
-  final List<String> detectedWords;
-
-  /// リスクスコア（0.0-1.0）
-  final double riskScore;
-
-  /// 詳細メッセージ（開発用）
-  final String? detailMessage;
-
-  /// ユーザー向けメッセージ
-  final String? userMessage;
-
-  /// エラーかどうか
-  final bool isError;
-
-  /// エラーメッセージ
-  final String? errorMessage;
-
-  /// タイムスタンプ（キャッシュ用）
-  final DateTime timestamp;
-
   RemoteModerationResult({
     required this.isClean,
     required this.shouldBlock,
@@ -291,6 +265,36 @@ class RemoteModerationResult {
     );
   }
 
+  /// テキストがクリーンか
+  final bool isClean;
+
+  /// ブロックすべきか
+  final bool shouldBlock;
+
+  /// 検出されたカテゴリ
+  final List<String> detectedCategories;
+
+  /// 検出されたNGワード（マスク済み）
+  final List<String> detectedWords;
+
+  /// リスクスコア（0.0-1.0）
+  final double riskScore;
+
+  /// 詳細メッセージ（開発用）
+  final String? detailMessage;
+
+  /// ユーザー向けメッセージ
+  final String? userMessage;
+
+  /// エラーかどうか
+  final bool isError;
+
+  /// エラーメッセージ
+  final String? errorMessage;
+
+  /// タイムスタンプ（キャッシュ用）
+  final DateTime timestamp;
+
   /// JSONに変換
   Map<String, dynamic> toJson() {
     return {
@@ -321,21 +325,6 @@ class RemoteModerationResult {
 
 /// NGワードリスト更新情報
 class NgWordListUpdate {
-  /// バージョン
-  final String version;
-
-  /// 更新日時
-  final DateTime updatedAt;
-
-  /// 追加されたワード数
-  final int addedCount;
-
-  /// 削除されたワード数
-  final int removedCount;
-
-  /// ダウンロードURL（差分更新用）
-  final String? downloadUrl;
-
   const NgWordListUpdate({
     required this.version,
     required this.updatedAt,
@@ -353,4 +342,19 @@ class NgWordListUpdate {
       downloadUrl: json['download_url'] as String?,
     );
   }
+
+  /// バージョン
+  final String version;
+
+  /// 更新日時
+  final DateTime updatedAt;
+
+  /// 追加されたワード数
+  final int addedCount;
+
+  /// 削除されたワード数
+  final int removedCount;
+
+  /// ダウンロードURL（差分更新用）
+  final String? downloadUrl;
 }

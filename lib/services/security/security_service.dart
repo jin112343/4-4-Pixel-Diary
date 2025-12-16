@@ -7,12 +7,6 @@ import '../../core/utils/logger.dart';
 
 /// セキュリティステータス
 class SecurityStatus {
-  final bool isJailbroken;
-  final bool isRooted;
-  final bool isDeveloperMode;
-  final bool isEmulator;
-  final List<String> warnings;
-
   SecurityStatus({
     required this.isJailbroken,
     required this.isRooted,
@@ -20,6 +14,12 @@ class SecurityStatus {
     required this.isEmulator,
     required this.warnings,
   });
+
+  final bool isJailbroken;
+  final bool isRooted;
+  final bool isDeveloperMode;
+  final bool isEmulator;
+  final List<String> warnings;
 
   /// セキュアな状態かどうか
   bool get isSecure =>
@@ -82,7 +82,7 @@ class SecurityService {
         warnings.add('エミュレータが検出されました');
       }
 
-      logger.i('Security check completed: ${warnings.isEmpty ? "secure" : warnings.length.toString() + " warnings"}');
+      logger.i('Security check completed: ${warnings.isEmpty ? "secure" : "${warnings.length} warnings"}');
     } catch (e, stackTrace) {
       logger.e(
         'SecurityService.checkSecurity failed',

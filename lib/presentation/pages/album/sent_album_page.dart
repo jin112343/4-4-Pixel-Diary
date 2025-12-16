@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/color_constants.dart';
 import '../../../domain/entities/pixel_art.dart';
-import 'album_view_model.dart';
+import '../../../domain/entities/post.dart';
+import '../../../providers/app_providers.dart';
 import 'sent_album_view_model.dart';
 
 /// おくったアルバム画面
@@ -427,13 +428,13 @@ class _SentAlbumItem extends StatelessWidget {
 }
 
 /// 詳細ダイアログ
-class _DetailDialog extends StatelessWidget {
+class _DetailDialog extends ConsumerWidget {
   const _DetailDialog({required this.pixelArt});
 
   final PixelArt pixelArt;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Dialog(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -491,7 +492,33 @@ class _DetailDialog extends StatelessWidget {
               ),
             ),
 
+            // ソース表示
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Chip(
+                label: Text('じぶん'),
+                avatar: Icon(Icons.person, size: 18),
+              ),
+            ),
+
             const SizedBox(height: 16),
+
+            // 投稿ボタン
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showPostDialog(context, ref),
+                  icon: const Icon(Icons.send),
+                  label: const Text('タイムラインに投稿'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
 
             // 閉じるボタン
             SizedBox(
@@ -510,5 +537,84 @@ class _DetailDialog extends StatelessWidget {
   String _formatDateTime(DateTime date) {
     return '${date.year}/${date.month}/${date.day} '
         '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// 投稿確認ダイアログを表示
+  void _showPostDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('タイムラインに投稿'),
+        content: const Text(
+          'このドット絵をタイムラインに投稿しますか？\n'
+          '投稿すると他のユーザーが閲覧できます。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              await _createPost(context, ref);
+            },
+            child: const Text('投稿する'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 投稿を作成
+  Future<void> _createPost(BuildContext context, WidgetRef ref) async {
+    final postRepository = ref.read(postRepositoryProvider);
+
+    // ローディング表示
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    final result = await postRepository.createPost(
+      pixelArtId: pixelArt.id,
+      pixels: pixelArt.pixels,
+      title: pixelArt.title,
+      gridSize: pixelArt.gridSize,
+      visibility: PostVisibility.public,
+    );
+
+    // ローディング閉じる
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
+
+    result.fold(
+      (failure) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('投稿に失敗しました: ${failure.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      (post) {
+        if (context.mounted) {
+          // 詳細ダイアログを閉じる
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('投稿しました！'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+    );
   }
 }

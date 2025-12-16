@@ -78,8 +78,10 @@ Future<void> _initializeServices() async {
     // セキュリティサービス
     securityService = SecurityService();
 
-    // 広告サービス
-    await AdService.instance.initialize();
+    // 広告サービスは非同期で初期化（起動をブロックしない）
+    AdService.instance.initialize().catchError((Object error, StackTrace stackTrace) {
+      logger.e('AdService initialization failed', error: error, stackTrace: stackTrace);
+    });
 
     logger.i('Services initialized successfully');
   } catch (e, stackTrace) {

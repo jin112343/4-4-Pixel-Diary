@@ -8,17 +8,17 @@ import '../../domain/entities/anonymous_user.dart';
 /// 匿名認証サービス
 /// 個人情報を一切収集せず、デバイスUUIDのみで識別
 class AnonymousAuthService {
-  final LocalStorage _localStorage;
-  final SecureStorage _secureStorage;
-  final Uuid _uuid = const Uuid();
-
-  AnonymousUser? _currentUser;
-
   AnonymousAuthService({
     required LocalStorage localStorage,
     required SecureStorage secureStorage,
   })  : _localStorage = localStorage,
         _secureStorage = secureStorage;
+
+  final LocalStorage _localStorage;
+  final SecureStorage _secureStorage;
+  final Uuid _uuid = const Uuid();
+
+  AnonymousUser? _currentUser;
 
   /// 現在のユーザーを取得
   AnonymousUser? get currentUser => _currentUser;

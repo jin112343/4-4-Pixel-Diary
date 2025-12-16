@@ -109,16 +109,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                 // 通知設定
                 SwitchListTile(
+                  // ignore: prefer_const_constructors - kIsWebによる動的な色指定のため
                   secondary: Icon(
                     Icons.notifications,
                     color: kIsWeb ? Colors.grey : null,
                   ),
+                  // ignore: prefer_const_constructors - kIsWebによる動的なスタイル指定のため
                   title: Text(
                     '通知',
                     style: kIsWeb
                         ? const TextStyle(color: Colors.grey)
                         : null,
                   ),
+                  // ignore: prefer_const_constructors - kIsWebによる動的なスタイル指定のため
                   subtitle: Text(
                     kIsWeb ? 'Webでは利用できません' : '交換完了時に通知',
                     style: kIsWeb
@@ -174,18 +177,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   title: const Text('お問い合わせ・改善意見'),
                   onTap: () => _navigateToFeedback(context),
                 ),
-                const Divider(),
-
-                // データ削除
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text(
-                    'すべてのデータを削除',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  subtitle: const Text('アルバムと設定がすべて削除されます'),
-                  onTap: () => _showDeleteConfirmDialog(context, ref),
-                ),
               ],
             ),
     );
@@ -215,52 +206,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     WidgetRef ref,
     SettingsState state,
   ) {
-    final controller = TextEditingController(text: state.user?.nickname ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    showDialog<void>(
+    showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('ニックネーム'),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: controller,
-              maxLength: 5,
-              decoration: const InputDecoration(
-                hintText: '5文字以内',
-                counterText: '',
-              ),
-              validator: (value) {
-                if (value != null && value.length > 5) {
-                  return '5文字以内で入力してください';
-                }
-                return null;
-              },
-              autofocus: true,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('キャンセル'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  ref
-                      .read(settingsViewModelProvider.notifier)
-                      .updateNickname(controller.text);
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('保存'),
-            ),
-          ],
+      builder: (dialogContext) {
+        return _NicknameDialog(
+          initialNickname: state.user?.nickname ?? '',
         );
       },
-    ).then((_) => controller.dispose());
+    ).then((nickname) {
+      if (nickname != null) {
+        ref.read(settingsViewModelProvider.notifier).updateNickname(nickname);
+      }
+    });
   }
 
   void _showThemeDialog(
@@ -268,39 +225,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     WidgetRef ref,
     ThemeMode currentMode,
   ) {
-    showDialog<void>(
+    showDialog<ThemeMode>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return SimpleDialog(
           title: const Text('テーマを選択'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: ThemeMode.values.map((mode) {
-              return ListTile(
-                leading: Radio<ThemeMode>(
-                  value: mode,
-                  groupValue: currentMode,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(themeModeProvider.notifier).setThemeMode(value);
-                      ref
-                          .read(settingsViewModelProvider.notifier)
-                          .updateThemeMode(value);
-                      Navigator.of(context).pop();
-                    }
-                  },
-                ),
-                title: Text(_themeModeToString(mode)),
-                onTap: () {
-                  ref.read(themeModeProvider.notifier).setThemeMode(mode);
-                  ref
-                      .read(settingsViewModelProvider.notifier)
-                      .updateThemeMode(mode);
-                  Navigator.of(context).pop();
-                },
-              );
-            }).toList(),
-          ),
+          children: ThemeMode.values.map((mode) {
+            final isSelected = mode == currentMode;
+            return SimpleDialogOption(
+              onPressed: () {
+                ref.read(themeModeProvider.notifier).setThemeMode(mode);
+                ref
+                    .read(settingsViewModelProvider.notifier)
+                    .updateThemeMode(mode);
+                Navigator.of(context).pop(mode);
+              },
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    color: isSelected
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _themeModeToString(mode),
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : null,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         );
       },
     );
@@ -416,37 +376,70 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
-  void _showDeleteConfirmDialog(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('データの削除'),
-          content: const Text(
-            'すべてのデータを削除しますか？\n\n'
-            '・アルバムのすべてのドット絵\n'
-            '・設定情報\n\n'
-            'この操作は取り消せません。',
+}
+
+/// ニックネーム編集ダイアログ
+class _NicknameDialog extends StatefulWidget {
+  const _NicknameDialog({required this.initialNickname});
+
+  final String initialNickname;
+
+  @override
+  State<_NicknameDialog> createState() => _NicknameDialogState();
+}
+
+class _NicknameDialogState extends State<_NicknameDialog> {
+  late final TextEditingController _controller;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialNickname);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('ニックネーム'),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          maxLength: 5,
+          decoration: const InputDecoration(
+            hintText: '5文字以内',
+            counterText: '',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('キャンセル'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                ref.read(settingsViewModelProvider.notifier).deleteAllData();
-                Navigator.of(context).pop();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('削除する'),
-            ),
-          ],
-        );
-      },
+          validator: (value) {
+            if (value != null && value.length > 5) {
+              return '5文字以内で入力してください';
+            }
+            return null;
+          },
+          autofocus: true,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_formKey.currentState?.validate() ?? false) {
+              Navigator.of(context).pop(_controller.text);
+            }
+          },
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

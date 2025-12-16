@@ -8,10 +8,10 @@ import '../../../core/utils/logger.dart';
 /// リクエスト署名インターセプター
 /// HMAC-SHA256を使用してリクエストに署名を追加
 class RequestSignerInterceptor extends Interceptor {
+  RequestSignerInterceptor({required this.signingKey});
+
   final String signingKey;
   final Random _random = Random.secure();
-
-  RequestSignerInterceptor({required this.signingKey});
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
@@ -88,9 +88,9 @@ class RequestSignerInterceptor extends Interceptor {
 
 /// リクエスト署名ユーティリティ
 class RequestSigner {
-  final String signingKey;
-
   RequestSigner({required this.signingKey});
+
+  final String signingKey;
 
   /// 署名データを生成
   SignatureData generateSignature(String body) {
@@ -156,15 +156,15 @@ class RequestSigner {
 
 /// 署名データ
 class SignatureData {
-  final String timestamp;
-  final String nonce;
-  final String signature;
-
   const SignatureData({
     required this.timestamp,
     required this.nonce,
     required this.signature,
   });
+
+  final String timestamp;
+  final String nonce;
+  final String signature;
 
   Map<String, String> toHeaders() {
     return {

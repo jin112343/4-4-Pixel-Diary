@@ -8,14 +8,14 @@ import 'maintenance_screen.dart';
 /// アプリ設定チェッカー
 /// アプリ起動時に強制アップデートとメンテナンスモードをチェックする
 class AppConfigChecker extends ConsumerStatefulWidget {
-  final Widget child;
-  final String currentVersion;
-
   const AppConfigChecker({
     super.key,
     required this.child,
     required this.currentVersion,
   });
+
+  final Widget child;
+  final String currentVersion;
 
   @override
   ConsumerState<AppConfigChecker> createState() => _AppConfigCheckerState();

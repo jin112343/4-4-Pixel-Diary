@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 
 /// ドット絵表示ウィジェット
 class PixelArtDisplay extends StatelessWidget {
-  final List<int> pixels;
-  final int gridSize;
-
   const PixelArtDisplay({
     super.key,
     required this.pixels,
     this.gridSize = 4,
   });
+
+  final List<int> pixels;
+  final int gridSize;
 
   @override
   Widget build(BuildContext context) {
@@ -25,13 +25,13 @@ class PixelArtDisplay extends StatelessWidget {
 }
 
 class _PixelArtPainter extends CustomPainter {
-  final List<int> pixels;
-  final int gridSize;
-
   _PixelArtPainter({
     required this.pixels,
     required this.gridSize,
   });
+
+  final List<int> pixels;
+  final int gridSize;
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -4,22 +4,38 @@ import '../../../core/utils/logger.dart';
 
 /// セキュアストレージサービス
 /// 機密情報（デバイスID、トークンなど）を安全に保存
+///
+/// セキュリティ設定:
+/// - Android: EncryptedSharedPreferences使用（AES-256-GCM暗号化）
+/// - iOS: Keychain使用（より厳格なアクセス制御）
+///   - first_unlock: デバイス初回ロック解除後にアクセス可能
+///   - passcode_set_this_device_only: パスコード設定時のみアクセス可能（推奨）
 class SecureStorage {
-  static const String _deviceIdKey = 'device_id';
-  static const String _accessTokenKey = 'access_token';
-  static const String _refreshTokenKey = 'refresh_token';
-
-  final FlutterSecureStorage _storage;
-
   SecureStorage()
       : _storage = const FlutterSecureStorage(
           aOptions: AndroidOptions(
+            // Android 6.0以上でEncryptedSharedPreferencesを使用
             encryptedSharedPreferences: true,
+            // キーストア設定（セキュリティ強化）
+            keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,
+            storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
           ),
           iOptions: IOSOptions(
-            accessibility: KeychainAccessibility.first_unlock_this_device,
+            // より厳格なアクセス制御
+            // passcode_set_this_device_only: パスコード設定時のみアクセス可能
+            // バックアップには含まれない（デバイス固有）
+            accessibility: KeychainAccessibility.passcode,
+            // iCloud同期を無効化（デバイス固有データ）
+            synchronizable: false,
           ),
         );
+
+  static const String _deviceIdKey = 'device_id';
+  static const String _accessTokenKey = 'access_token';
+  static const String _refreshTokenKey = 'refresh_token';
+  static const String _signingKeyKey = 'api_signing_key';
+
+  final FlutterSecureStorage _storage;
 
   // ========== Device ID ==========
 
@@ -117,6 +133,38 @@ class SecureStorage {
     }
   }
 
+  // ========== API Signing Key ==========
+
+  /// API署名キーを保存
+  Future<void> saveSigningKey(String key) async {
+    try {
+      await _storage.write(key: _signingKeyKey, value: key);
+      logger.d('API signing key saved');
+    } catch (e, stackTrace) {
+      logger.e('Failed to save signing key', error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  /// API署名キーを取得
+  Future<String?> getSigningKey() async {
+    try {
+      return await _storage.read(key: _signingKeyKey);
+    } catch (e, stackTrace) {
+      logger.e('Failed to get signing key', error: e, stackTrace: stackTrace);
+      return null;
+    }
+  }
+
+  /// API署名キーを削除
+  Future<void> deleteSigningKey() async {
+    try {
+      await _storage.delete(key: _signingKeyKey);
+    } catch (e, stackTrace) {
+      logger.e('Failed to delete signing key', error: e, stackTrace: stackTrace);
+    }
+  }
+
   // ========== Utilities ==========
 
   /// すべてのセキュアデータを削除
@@ -126,6 +174,16 @@ class SecureStorage {
       logger.i('All secure data cleared');
     } catch (e, stackTrace) {
       logger.e('Failed to clear secure data', error: e, stackTrace: stackTrace);
+    }
+  }
+
+  /// キーが存在するか確認
+  Future<bool> containsKey(String key) async {
+    try {
+      return await _storage.containsKey(key: key);
+    } catch (e, stackTrace) {
+      logger.e('Failed to check key existence', error: e, stackTrace: stackTrace);
+      return false;
     }
   }
 }

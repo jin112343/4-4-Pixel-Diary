@@ -7,14 +7,14 @@ import '../../core/utils/text_normalizer.dart';
 /// コンテンツモデレーションサービス
 /// ローカルフィルタリング + 外部API（Perspective API等）を統合
 class ModerationService {
-  final Dio _dio;
-  final ModerationConfig _config;
-
   ModerationService({
     required ModerationConfig config,
     Dio? dio,
   })  : _config = config,
         _dio = dio ?? Dio();
+
+  final Dio _dio;
+  final ModerationConfig _config;
 
   // ============================================================
   // 統合モデレーション
@@ -234,27 +234,6 @@ class ModerationService {
 
 /// モデレーション設定
 class ModerationConfig {
-  /// Perspective APIを使用するか
-  final bool usePerspectiveApi;
-
-  /// Perspective APIキー
-  final String? perspectiveApiKey;
-
-  /// ローカルフィルタのブロック閾値（重大度）
-  final int localBlockThreshold;
-
-  /// 毒性スコアのブロック閾値
-  final double toxicityThreshold;
-
-  /// 重大な毒性スコアのブロック閾値
-  final double severeToxicityThreshold;
-
-  /// 脅迫スコアのブロック閾値
-  final double threatThreshold;
-
-  /// アイデンティティ攻撃スコアのブロック閾値
-  final double identityAttackThreshold;
-
   const ModerationConfig({
     this.usePerspectiveApi = false,
     this.perspectiveApiKey,
@@ -298,10 +277,40 @@ class ModerationConfig {
       identityAttackThreshold: 0.3,
     );
   }
+
+  /// Perspective APIを使用するか
+  final bool usePerspectiveApi;
+
+  /// Perspective APIキー
+  final String? perspectiveApiKey;
+
+  /// ローカルフィルタのブロック閾値（重大度）
+  final int localBlockThreshold;
+
+  /// 毒性スコアのブロック閾値
+  final double toxicityThreshold;
+
+  /// 重大な毒性スコアのブロック閾値
+  final double severeToxicityThreshold;
+
+  /// 脅迫スコアのブロック閾値
+  final double threatThreshold;
+
+  /// アイデンティティ攻撃スコアのブロック閾値
+  final double identityAttackThreshold;
 }
 
 /// APIモデレーション結果
 class ApiModerationResult {
+  const ApiModerationResult({
+    required this.toxicity,
+    required this.severeToxicity,
+    required this.insult,
+    required this.profanity,
+    required this.threat,
+    required this.identityAttack,
+  });
+
   /// 毒性スコア（0.0-1.0）
   final double toxicity;
 
@@ -319,15 +328,6 @@ class ApiModerationResult {
 
   /// アイデンティティ攻撃スコア
   final double identityAttack;
-
-  const ApiModerationResult({
-    required this.toxicity,
-    required this.severeToxicity,
-    required this.insult,
-    required this.profanity,
-    required this.threat,
-    required this.identityAttack,
-  });
 
   /// 最大スコアを取得
   double get maxScore {
@@ -359,24 +359,6 @@ class ApiModerationResult {
 
 /// モデレーション結果
 class ModerationResult {
-  /// 投稿が許可されるか
-  final bool isAllowed;
-
-  /// 元のテキスト
-  final String originalText;
-
-  /// ローカルフィルタ結果
-  final ContentCheckResult? localResult;
-
-  /// API結果
-  final ApiModerationResult? apiResult;
-
-  /// ブロック理由
-  final String? blockReason;
-
-  /// ブロックすべきか
-  final bool shouldBlock;
-
   const ModerationResult({
     required this.isAllowed,
     required this.originalText,
@@ -397,6 +379,24 @@ class ModerationResult {
       shouldBlock: false,
     );
   }
+
+  /// 投稿が許可されるか
+  final bool isAllowed;
+
+  /// 元のテキスト
+  final String originalText;
+
+  /// ローカルフィルタ結果
+  final ContentCheckResult? localResult;
+
+  /// API結果
+  final ApiModerationResult? apiResult;
+
+  /// ブロック理由
+  final String? blockReason;
+
+  /// ブロックすべきか
+  final bool shouldBlock;
 
   /// ユーザー向けメッセージ
   String get userMessage {
@@ -432,13 +432,6 @@ class ModerationResult {
 
 /// モデレーションログ（監査用）
 class ModerationLog {
-  final String id;
-  final DateTime timestamp;
-  final String userId;
-  final String originalText;
-  final ModerationResult result;
-  final String? action; // 'blocked', 'allowed', 'flagged'
-
   const ModerationLog({
     required this.id,
     required this.timestamp,
@@ -447,6 +440,13 @@ class ModerationLog {
     required this.result,
     this.action,
   });
+
+  final String id;
+  final DateTime timestamp;
+  final String userId;
+  final String originalText;
+  final ModerationResult result;
+  final String? action; // 'blocked', 'allowed', 'flagged'
 
   Map<String, dynamic> toJson() {
     return {
