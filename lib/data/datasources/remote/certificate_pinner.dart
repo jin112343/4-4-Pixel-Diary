@@ -28,9 +28,8 @@ class CertificatePinner {
   // 許可されたホスト
   static const List<String> _allowedHosts = [
     'api.pixeldiary.app',
-    'dev-api.pixeldiary.app',
-    // AWS API Gateway
-    '7myvq0fjwe.execute-api.ap-northeast-1.amazonaws.com',
+    // AWS API Gateway（本番環境）
+    'mipptdxyc9.execute-api.ap-northeast-1.amazonaws.com',
   ];
 
   /// Dioに証明書ピンニングを設定

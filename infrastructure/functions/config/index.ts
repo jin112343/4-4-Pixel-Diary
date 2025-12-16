@@ -16,7 +16,7 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, X-App-Version, X-Platform, Authorization, X-Timestamp, X-Nonce, X-Signature',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, X-App-Version, X-Platform, Authorization, X-Timestamp, X-Nonce, X-Signature, X-Request-Time',
 };
 
 interface AppConfigResponse {

@@ -153,6 +153,7 @@ export class ApiStack extends cdk.Stack {
           'X-Timestamp',
           'X-Nonce',
           'X-Signature',
+          'X-Request-Time',
         ],
       },
     });

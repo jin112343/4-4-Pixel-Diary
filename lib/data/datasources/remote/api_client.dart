@@ -1,10 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/logger.dart';
 import 'api_interceptor.dart';
-import 'certificate_pinner.dart';
+import 'certificate_pinner.dart' if (dart.library.html) 'certificate_pinner_web.dart';
 import 'request_signer.dart';
 
 /// APIクライアント
