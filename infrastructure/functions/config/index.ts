@@ -12,6 +12,13 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const APP_CONFIG_TABLE = process.env.APP_CONFIG_TABLE!;
 
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, X-App-Version, X-Platform, Authorization, X-Timestamp, X-Nonce, X-Signature',
+};
+
 interface AppConfigResponse {
   version: {
     minVersion: string;
@@ -151,13 +158,6 @@ function compareVersions(v1: string, v2: string): number {
 
   return 0;
 }
-
-const CORS_HEADERS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID, X-App-Version, X-Platform, Authorization, X-Timestamp, X-Nonce, X-Signature',
-};
 
 function successResponse(body: ApiResponse): APIGatewayProxyResult {
   return {

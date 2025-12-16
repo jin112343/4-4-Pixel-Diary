@@ -8,20 +8,12 @@ import { MonitoringStack } from '../lib/stacks/monitoring-stack';
 
 const app = new cdk.App();
 
-// 環境設定
-const environment = app.node.tryGetContext('environment') || 'dev';
-const envConfig = {
-  dev: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'ap-northeast-1',
-  },
-  prod: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'ap-northeast-1',
-  },
+// 環境設定（本番環境のみ）
+const environment = 'prod';
+const env = {
+  account: process.env.CDK_DEFAULT_ACCOUNT,
+  region: 'ap-northeast-1',
 };
-
-const env = envConfig[environment as keyof typeof envConfig];
 const prefix = `pixeldiary-${environment}`;
 
 // タグ設定
