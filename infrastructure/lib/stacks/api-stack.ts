@@ -80,7 +80,7 @@ export class ApiStack extends cdk.Stack {
     const createLambda = (name: string): NodejsFunction => {
       const fn = new NodejsFunction(this, `${name}Function`, {
         functionName: `${prefix}-${name}`,
-        runtime: lambda.Runtime.NODEJS_20_X,
+        runtime: lambda.Runtime.NODEJS_22_X,
         entry: path.join(__dirname, '../../functions', name, 'index.ts'),
         handler: 'handler',
         role: lambdaRole,
@@ -110,7 +110,7 @@ export class ApiStack extends cdk.Stack {
     // Seed関数（管理者専用）
     const seedFunction = new NodejsFunction(this, 'SeedFunction', {
       functionName: `${prefix}-seed`,
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: path.join(__dirname, '../../functions', 'seed', 'index.ts'),
       handler: 'handler',
       role: lambdaRole,

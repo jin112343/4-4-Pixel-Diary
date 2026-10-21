@@ -32,5 +32,8 @@
     "@types/node": "^22.10.1",
     "aws-cdk": "^2.170.0",
     "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": "^22.23.4"
   }
 }
